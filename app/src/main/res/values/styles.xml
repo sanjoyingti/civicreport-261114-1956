@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <!-- This file must be removed or renamed to avoid defining Theme.DuarBagoriReports again.
-         The main theme is now defined in themes.xml using Material 3.
-         Kept here empty to prevent "duplicate resource" errors after theme migration. -->
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <style name="Theme.DuarBagori" parent="android:Theme.Material3.DayNight.NoActionBar">
+        <item name="android:windowBackground">@color/background</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+
+    <style name="Theme.DuarBagori.NoActionBar" parent="Theme.DuarBagori" />
 </resources>
