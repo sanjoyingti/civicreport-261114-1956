@@ -16,6 +16,7 @@ import com.arin.civicreport.ui.screens.LocationDetailsScreen
 import com.arin.civicreport.ui.screens.AuthorityFinderScreen
 import com.arin.civicreport.ui.screens.ReviewAndSendScreen
 import com.arin.civicreport.ui.screens.SettingsScreen
+import com.arin.civicreport.ui.screens.ReportViewScreen
 import com.arin.civicreport.ui.screens.report.ReportViewModel
 import com.arin.civicreport.ui.util.PermissionManager
 import com.arin.civicreport.ui.util.Prefs
@@ -147,13 +148,18 @@ fun AppNavigation(
                 }
             )
         }
-        composable(NavigationRoute.REPORT_VIEW) {
-            HomeScreen(
+        composable(
+            route = "${NavigationRoute.REPORT_VIEW}/{id}",
+            arguments = listOf(navArgument("id") { type = NavType.LongType })
+        ) { backStackEntry ->
+            val id = backStackEntry.arguments?.getLong("id") ?: 0L
+            ReportViewScreen(
+                reportId = id,
                 repo = repo,
                 prefs = prefs,
                 onOpenSettings = { navController.navigate(NavigationRoute.SETTINGS) },
-                onReportNew = { navController.navigate(NavigationRoute.INCIDENT_SELECTOR) },
-                onOpenReport = { it }
+                onBack = { navController.popBackStack() },
+                permissionManager = permissionManager
             )
         }
         composable(NavigationRoute.SETTINGS) {

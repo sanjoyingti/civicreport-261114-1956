@@ -1,6 +1,5 @@
 package com.arin.civicreport.ui.screens
 
-import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -23,7 +22,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.arin.civicreport.model.IncidentStatus
 import com.arin.civicreport.ui.util.NetworkChecker
-import com.arin.civicreport.ui.util.PermissionManager
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

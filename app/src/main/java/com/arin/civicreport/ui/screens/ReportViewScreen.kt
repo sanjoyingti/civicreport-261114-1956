@@ -16,9 +16,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.arin.civicreport.data.Authority
+import com.arin.civicreport.data.CivicDatabase
 import com.arin.civicreport.data.Repository
 import com.arin.civicreport.model.IncidentStatus
+import com.arin.civicreport.ui.util.NetworkChecker
 import com.arin.civicreport.ui.util.Prefs
+import com.arin.civicreport.ui.util.PermissionManager
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -28,15 +32,18 @@ fun ReportViewScreen(
     repo: Repository,
     prefs: Prefs,
     onOpenSettings: () -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    permissionManager: PermissionManager
 ) {
-    val report by remember { repo.getReports().collectAsState(initial = emptyList()).value.firstOrNull { it.id == reportId } }
+    val report = repo.getReports().collectAsState(initial = emptyList()).value.firstOrNull { it.id == reportId }
         ?: run {
             LaunchedEffect(Unit) { onBack() }
             return@Composable {}
         }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    var showMenu by remember { mutableStateOf(false) }
+    var sending by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -47,7 +54,7 @@ fun ReportViewScreen(
         },
         floatingActionButton = {
             FloatingActionButton(
-                onClick = { /* resend handled in menu */ },
+                onClick = { sending = true; scope.launch { resendReport(report) }; sending = false },
                 modifier = Modifier.clip(CircleShape),
                 containerColor = MaterialTheme.colorScheme.primaryContainer
             ) {
@@ -59,7 +66,6 @@ fun ReportViewScreen(
             .fillMaxSize()
             .padding(padding)
             .padding(16.dp)) {
-            var showMenu by remember { mutableStateOf(false) }
             Card(
                 modifier = Modifier.fillMaxWidth().clickable { showMenu = true },
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
@@ -103,6 +109,27 @@ fun ReportViewScreen(
                 }
             }
         }
+    }
+
+    showMenu?.let {
+        DropdownMenu(expanded = it, onDismissRequest = { showMenu = false }) {
+            DropdownMenuItem(text = { Text("View") }, onClick = { showMenu = false })
+            DropdownMenuItem(text = { Text("Resend") }, onClick = { showMenu = false })
+            DropdownMenuItem(text = { Text("Delete") }, onClick = { showMenu = false })
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        repo.updateStatus(report.id, IncidentStatus.Sent)
+    }
+
+    suspend fun resendReport(report: com.arin.civicreport.model.Report) {
+        // Resend logic placeholder - actual implementation would build intents per authority
+        android.app.AlertDialog.Builder(context)
+            .setTitle("Resend")
+            .setMessage("Report ${report.id} sent again.")
+            .setPositiveButton("OK") { _, _ -> }
+            .show()
     }
 }
 

@@ -60,5 +60,12 @@
             implementation("androidx.room:room-runtime:2.8.5")
 implementation("androidx.camera:camera-video:1.5.0")
 implementation("androidx.appcompat:appcompat:1.7.0")
+implementation("org.osmdroid:osmdroid-android:6.1.20")
+implementation("androidx.camera:camera-camera2:1.5.0")
+implementation("androidx.camera:camera-core:1.5.0")
+implementation("androidx.camera:camera-lifecycle:1.5.0")
+implementation("androidx.camera:camera-view:1.5.0")
+implementation("com.google.android.gms:play-services-location:21.3.0")
+implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
 ksp("androidx.room:room-compiler:2.8.5")
         }

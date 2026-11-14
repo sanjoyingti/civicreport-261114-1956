@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.arin.civicreport.ui.media.CameraManager
@@ -35,6 +36,7 @@ fun CaptureScreen(
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val view = LocalView.current
     var capturedUri by remember { mutableStateOf<Uri?>(null) }
     var captureMode by remember { mutableStateOf<CaptureMode>(None) }
     val cameraManager = remember { CameraManager(context) }
@@ -67,8 +69,8 @@ fun CaptureScreen(
             cameraManager.takePhoto(it) { uri ->
                 capturedUri = uri
                 onCaptureSuccess(uri, "photo")
-            } onError: (String) -> Unit -> {
-                onCameraError("Camera error: $it")
+            } onError = { err ->
+                onCameraError("Camera error: $err")
             }
         }
     }
@@ -87,8 +89,8 @@ fun CaptureScreen(
             cameraManager.startVideo(it) { uri ->
                 capturedUri = uri
                 onCaptureSuccess(uri, "video")
-            } onError: (String) -> Unit -> {
-                onCameraError("Camera error: $it")
+            } onError = { err ->
+                onCameraError("Camera error: $err")
             }
         }
     }
@@ -148,7 +150,7 @@ fun CaptureScreen(
                     Button(
                         onClick = {
                             if (permissionManager.hasCamera(context) && cameraReady) {
-                                if (captureMode == CaptureMode.VideoMode) takeVideo() else takePhoto()
+                                if (captureMode == VideoMode) takeVideo() else takePhoto()
                             } else permissionManager.requestCameraPermission()
                         },
                         modifier = Modifier.fillMaxWidth()

@@ -1,14 +1,10 @@
 package com.arin.civicreport.ui.screens
 
-import android.graphics.Bitmap
-import android.os.Build
-import android.widget.Toast
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -20,13 +16,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.arin.civicreport.ui.location.CurrentLocation
 import com.arin.civicreport.ui.location.LocationManager
 import com.arin.civicreport.ui.location.MapViewProvider
-import com.arin.civicreport.ui.location.StateAddress
 import com.arin.civicreport.ui.screens.report.ReportViewModel
-import org.osmdroid.config.Configuration
-import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import com.arin.civicreport.ui.util.Prefs
 import org.osmdroid.util.GeoPoint
-import org.osmdroid.views.MapView
-import org.osmdroid.views.overlay.Marker
 import java.text.DecimalFormat
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -42,6 +34,7 @@ fun LocationDetailsScreen(
     onRetake: () -> Unit
 ) {
     val context = LocalContext.current
+    val prefs = remember { Prefs(context) }
     val reportViewModel: ReportViewModel = viewModel()
     val locationManager = remember { LocationManager(context) }
 
@@ -50,35 +43,23 @@ fun LocationDetailsScreen(
     var addr by remember { mutableStateOf(address) }
     var description by remember { mutableStateOf("") }
     var currentState by remember { mutableStateOf<LocationManager.LocationState?>(null) }
-    var mapReady by remember { mutableStateOf(false) }
-    var selectedPoint by remember { mutableStateOf<GeoPoint?>(null) }
-    var mapMarker by remember { mutableStateOf<Marker?>(null) }
-    var mapView by remember { mutableStateOf<MapView?>(null) }
+    var mapPoint by remember { mutableStateOf<GeoPoint?>(null) }
 
     LaunchedEffect(Unit) {
+        if (prefs.enableLocationServices) {
+            locationManager.getCurrentLocation().let { loc ->
+                lat = loc.latitude
+                lon = loc.longitude
+                addr = loc.address
+            }
+        }
         locationManager.observeState().collect { state ->
             currentState = state
-            when (state) {
-                is LocationManager.LocationState.Ready -> {
-                    lat = state.loc.latitude
-                    lon = state.loc.longitude
-                    addr = state.loc.address
-                    if (selectedPoint == null) {
-                        selectedPoint = GeoPoint(state.loc.latitude, state.loc.longitude)
-                    }
-                }
-                is LocationManager.LocationState.Error -> {
-                    // User can still confirm with manual coords
-                }
-                else -> {}
-            }
         }
     }
 
     fun saveToBackStack() {
         reportViewModel.setReportId(-1L)
-        // Store the values the next screen needs.
-        Unit // no-op; nav graph uses savedStateHandle via reportViewModel for state
     }
 
     fun onConfirm() {
@@ -90,20 +71,13 @@ fun LocationDetailsScreen(
         lat = loc.latitude
         lon = loc.longitude
         addr = loc.address
-        selectedPoint = GeoPoint(loc.latitude, loc.longitude)
     }
 
     Scaffold(topBar = {
         TopAppBar(title = { Text("Location & Details", fontWeight = FontWeight.Bold) })
     }, floatingActionButton = {
         FloatingActionButton(
-            onClick = {
-                if (selectedPoint != null) {
-                    onConfirm()
-                } else {
-                    Toast.makeText(context, "Please tap the map to place a pin", Toast.LENGTH_SHORT).show()
-                }
-            },
+            onClick = { onConfirm() },
             content = { Icon(Icons.Default.Check, contentDescription = "Confirm location") }
         )
     }) { padding ->
@@ -113,7 +87,6 @@ fun LocationDetailsScreen(
                 .padding(padding)
                 .padding(16.dp)
         ) {
-            // Map view with tap-to-pan + tap-to-place-pin
             Card(
                 modifier = Modifier
                     .aspectRatio(0.7f)
@@ -121,49 +94,20 @@ fun LocationDetailsScreen(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 Box(contentAlignment = Alignment.Center) {
-                    LaunchedEffect(Unit) {
-                        Configuration.getInstance().load(context, context.getSharedPreferences("osmdroid", 0))
-                        mapView = MapView(context).apply {
-                            setTileSource(TileSourceFactory.MAPNIK)
-                            setMultiTouchControls(true)
-                            controller.setZoom(15.0)
-                            controller.setCenter(selectedPoint ?: GeoPoint(19.0760, 72.8777))
-                            overlayManager.add(Marker(this).apply {
-                                position = selectedPoint ?: GeoPoint(19.0760, 72.8777)
-                                this.title = "Pin"
-                                this.subTitle = addr.ifBlank { "Tap map to move pin" }
-                            })
-                            setOnMapTouchListener {
-                                mapReady = true
-                            }
-                            setOnMapClickListener { point, _ ->
-                                selectedPoint = point
-                                mapMarker?.let { overlayManager.remove(it) }
-                                mapMarker = Marker(this).apply {
-                                    position = point
-                                    this.title = "Selected pin"
-                                    this.subTitle = point.latitude.toString() + " " + point.longitude.toString()
-                                }
-                                overlayManager.add(mapMarker!!)
-                                // Reverse geocode for address
-                                viewModel<ReportViewModel>().let { vm ->
-                                    // quick fallback address
-                                }
-                            }
-                            mapView = this
-                            mapReady = true
-                        }
-                    }
-                    when {
-                        !mapReady -> CircularProgressIndicator()
-                        else -> mapView
+                    MapViewProvider(
+                        initialPoint = if (mapPoint != null) mapPoint!! else GeoPoint(latitude, longitude),
+                        initialAddress = addr
+                    ) { point ->
+                        mapPoint = point
+                        lat = point.latitude
+                        lon = point.longitude
+                        addr = "${point.latitude}, ${point.longitude}"
                     }
                 }
             }
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Detected address + coordinates
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
@@ -177,7 +121,6 @@ fun LocationDetailsScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Editable description
             OutlinedTextField(
                 value = description,
                 onValueChange = { description = it },
