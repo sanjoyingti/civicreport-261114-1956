@@ -8,12 +8,10 @@ import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.Preview
-import androidx.camera.core.VideoCapture
 import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
-import androidx.camera.view.SurfaceProvider
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
 import java.io.File
@@ -29,7 +27,7 @@ class CameraManager(private val context: Context) {
     private var cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
     private val cameraExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private var preview: Preview? = null
-    private var videoCapture: VideoCapture<*>? = null
+    private var videoCapture: androidx.camera.video.VideoCapture? = null
 
     fun initializeCamera(lifecycleOwner: LifecycleOwner, onReady: () -> Unit) {
         val future = ProcessCameraProvider.getInstance(context)
@@ -45,10 +43,10 @@ class CameraManager(private val context: Context) {
                 selectorBuilder.setResolutionStrategy(resolutionStrategy)
                 val selector = selectorBuilder.build()
                 preview = Preview.Builder().setResolutionSelector(selector).build().also {
-                    it.setSurfaceProvider(lifecycleOwner.surfaceProvider ?: createSurfaceProvider(lifecycleOwner))
+                    it.setSurfaceProvider(cameraProvider?.getSurfaceProvider(PreviewView(context))!!)
                 }
                 cameraProvider?.unbindAll()
-                cameraProvider?.bindToLifecycle(lifecycleOwner, cameraSelector, preview)
+                cameraProvider?.bindToLifecycle(lifecycleOwner, cameraSelector, preview!!)
                 onReady()
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -56,40 +54,25 @@ class CameraManager(private val context: Context) {
         }, ContextCompat.getMainExecutor(context))
     }
 
-    private fun LifecycleOwner.createSurfaceProvider(): SurfaceProvider {
-        return SurfaceProvider { view ->
-            val previewView = if (view is PreviewView) view else PreviewView(context).apply {
-                scaleType = PreviewView.ScaleType.CENTER_CROP
-                this@createSurfaceProvider as? android.view.ViewGroup?.let { root ->
-                    root.addView(this)
-                } ?: run {
-                    // Fallback: try to find ComposeView parent
-                    var v: android.view.View? = this
-                    while (v != null && v !is android.view.ViewGroup) {
-                        v = v.parent as? android.view.View
-                    }
-                    (v as? android.view.ViewGroup)?.addView(this)
-                }
-            }
-            previewView.surfaceProvider = view
-        }
-    }
-
     fun takePhoto(
         previewView: PreviewView,
         onImage: (Uri) -> Unit,
         onError: (String) -> Unit
     ) {
-        val photoCapture = ImageCapture.Builder().build()
+        val imageCapture = ImageCapture.Builder().build()
         val photo = object : ImageCapture.OnImageCapturedCallback() {
             override fun onCaptureSuccess(image: androidx.camera.core.ImageProxy) {
-                image.image?.let { bitmap ->
-                    val file = saveImageFile()
-                    android.graphics.Matrix().apply {
-                        val rotation = previewView.rotation.toFloat()
-                        postRotate(rotation)
-                    }
-                    android.graphics.BitmapFactory.Options().let { opts ->
+                val file = saveImageFile()
+                try {
+                    image.image?.let { bitmap ->
+                        android.graphics.Matrix().apply {
+                            val rotation = when (image.imageInfo.rotationDegrees) {
+                                90 -> rotate(90f)
+                                180 -> rotate(180f)
+                                270 -> rotate(270f)
+                                else -> this
+                            }
+                        }
                         val rotated = android.graphics.Bitmap.createBitmap(
                             bitmap, 0, 0, bitmap.width, bitmap.height, this, true
                         )
@@ -97,22 +80,23 @@ class CameraManager(private val context: Context) {
                             rotated.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, out)
                         }
                         rotated.recycle()
-                    }
-                    val uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        MediaStoreHelper.saveToMediaStore(context, file, MediaStoreHelper.MediaKind.Photo)
-                    } else {
-                        Uri.fromFile(file)
-                    }
-                    onImage(uri)
-                } ?: onError("Image bitmap was null")
-                image.close()
+                        val uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                            MediaStoreHelper.saveToMediaStore(context, file, MediaStoreHelper.MediaKind.Photo)
+                        } else {
+                            Uri.fromFile(file)
+                        }
+                        onImage(uri)
+                    } ?: onError("Image bitmap was null")
+                } finally {
+                    image.close()
+                }
             }
 
             override fun onError(exception: ImageCaptureException) {
                 onError(exception.message ?: "Capture failed")
             }
         }
-        photoCapture.takePicture(cameraExecutor, photo)
+        imageCapture.takePicture(cameraExecutor, photo)
     }
 
     fun startVideo(
@@ -122,23 +106,22 @@ class CameraManager(private val context: Context) {
     ) {
         val name = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US).format(Date()) + "_record.mp4"
         val contentUri = MediaStoreHelper.getContentUriForVideo(name)
-        videoCapture = VideoCapture.withOutput(
-            MediaStoreOutputOptions.Builder(context.contentResolver, contentUri).build()
-        )
-        videoCapture?.start(ContextCompat.getMainExecutor(context), object : VideoCapture.OnVideoStartedCallback() {
+        videoCapture = androidx.camera.video.VideoRecordEvent.Factory()
+        val recordArgs = androidx.camera.video.Record
+        val output = androidx.camera.video.MediaStoreOutputOptions.Builder(context.contentResolver, contentUri).build()
+        videoCapture = androidx.camera.video.VideoCapture.withOutput(output)
+        videoCapture?.start(ContextCompat.getMainExecutor(context), object : androidx.camera.video.VideoCapture.OnVideoStartedCallback {
             override fun onVideoStarted() {
                 onVideoReady(contentUri)
-            }
-
-            override fun onVideoStopped(result: VideoCapture.VideoCaptureResult) {
-                videoCapture = null
             }
         })
     }
 
     fun stopVideo(onVideoReady: (Uri) -> Unit, onError: (String) -> Unit) {
-        videoCapture?.stop()
-        videoCapture = null
+        videoCapture?.let {
+            it.stop()
+            videoCapture = null
+        }
     }
 
     fun releaseCamera() {

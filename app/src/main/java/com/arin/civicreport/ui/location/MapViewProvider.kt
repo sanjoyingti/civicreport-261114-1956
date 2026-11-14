@@ -18,16 +18,13 @@ import org.osmdroid.views.overlay.Marker
 fun MapViewProvider(
     initialPoint: GeoPoint? = null,
     initialAddress: String = "",
-    onPointChanged: (GeoPoint) -> Unit,
-    onAddressChanged: (String) -> Unit
+    onPointChanged: (GeoPoint) -> Unit
 ): MapView {
     val lifecycleOwner = LocalLifecycleOwner.current
     val view = LocalView.current
     var mapView by remember { mutableStateOf<MapView?>(null) }
     var selectedPoint by remember(initialPoint) { mutableStateOf(initialPoint) }
-    var mapMarker by remember { mutableStateOf<Marker?>(null) }
 
-    // Give the MapView a controllable lifecycle so CameraX / Compose can own it.
     val registry = remember {
         LifecycleRegistry(lifecycleOwner).apply {
             currentState = Lifecycle.State.CREATED
@@ -43,18 +40,10 @@ fun MapViewProvider(
             overlayManager.add(Marker(this).apply {
                 position = selectedPoint ?: GeoPoint(19.0760, 72.8777)
                 title = "Pin"
-                description = initialAddress.ifBlank { "Tap map to move pin" }
+                setInfoWindow(null)
             })
-            setOnMapClickListener { point: GeoPoint, _: MapView? ->
-                selectedPoint = point
-                mapMarker?.let { overlayManager.remove(it) }
-                mapMarker = Marker(this).apply {
-                    position = point
-                    title = "Selected pin"
-                    description = "${point.latitude}, ${point.longitude}"
-                }
-                overlayManager.add(mapMarker!!)
-                onPointChanged(point)
+            setOnMapClickListener { _, _ ->
+                // Map click handled per-MapView instance in LocationDetailsScreen
             }
         }
         mapView = m
@@ -66,11 +55,4 @@ fun MapViewProvider(
     }
 
     return mapView!!
-}
-
-interface MapViewProviderState {
-    var lat: Double
-    var lon: Double
-    var address: String
-    var currentLocation: CurrentLocation?
 }

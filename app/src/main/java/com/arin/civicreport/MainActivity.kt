@@ -22,6 +22,7 @@ import com.arin.civicreport.data.Repository
 import com.arin.civicreport.ui.navigation.AppNavigation
 import com.arin.civicreport.ui.theme.CivicReportTheme
 import com.arin.civicreport.ui.util.PermissionManager
+import com.arin.civicreport.ui.util.Prefs
 
 class MainActivity : ComponentActivity() {
 
