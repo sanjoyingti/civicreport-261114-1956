@@ -14,11 +14,18 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.asStateFlow
+import org.osmdroid.util.GeoPoint
 
 data class CurrentLocation(
     val latitude: Double, val longitude: Double,
     val address: String, val city: String, val district: String,
     val state: String, val pincode: String
+)
+
+/** Simple point passed to the map overlay. Mirrors osmdroid's GeoPoint so the rest of the app stays agnostic. */
+data class GeoPoint(
+    val latitude: Double,
+    val longitude: Double
 )
 
 class LocationManager(private val context: Context) {
