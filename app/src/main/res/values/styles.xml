@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.DuarBagoriReports" parent="Theme.Material3.Dark.NoActionBar" />
+    <!-- This file must be removed or renamed to avoid defining Theme.DuarBagoriReports again.
+         The main theme is now defined in themes.xml using Material 3.
+         Kept here empty to prevent "duplicate resource" errors after theme migration. -->
 </resources>
