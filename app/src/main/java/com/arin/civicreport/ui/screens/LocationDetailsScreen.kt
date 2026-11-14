@@ -6,16 +6,17 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.arin.civicreport.data.Repository
+import com.arin.civicreport.ui.location.CurrentLocation
+import com.arin.civicreport.ui.location.LocationManager
+import com.arin.civicreport.ui.util.NetworkChecker
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -30,15 +31,35 @@ fun LocationDetailsScreen(
     onRetake: () -> Unit
 ) {
     val context = LocalContext.current
+    val locationManager = remember { LocationManager(context) }
     var lat by remember { mutableStateOf(latitude) }
     var lon by remember { mutableStateOf(longitude) }
     var addr by remember { mutableStateOf(address) }
     var description by remember { mutableStateOf("") }
 
+    LaunchedEffect(Unit) {
+        locationManager.observeState().collect { state ->
+            when (state) {
+                is LocationManager.LocationState.Ready -> {
+                    lat = state.loc.latitude
+                    lon = state.loc.longitude
+                    addr = state.loc.address
+                }
+                is LocationManager.LocationState.Error -> {
+                    // User can still confirm with manual coords
+                }
+                else -> {}
+            }
+        }
+    }
+
     Scaffold(topBar = {
         TopAppBar(title = { Text("Location & Details", fontWeight = FontWeight.Bold) })
     }, floatingActionButton = {
-        FloatingActionButton(onClick = { onLocationConfirmed(lat, lon, addr) }) {
+        FloatingActionButton(onClick = {
+            onLocationConfirmed(lat, lon, addr)
+            navController.set("state", "Maharashtra")
+        }) {
             Icon(Icons.Default.Check, contentDescription = "Confirm location")
         }
     }) { padding ->
@@ -50,6 +71,7 @@ fun LocationDetailsScreen(
                 .aspectRatio(1f)
                 .clickable {
                     lat = 19.0760 + (Math.random() * 0.1 - 0.05); lon = 72.8777 + (Math.random() * 0.1 - 0.05)
+                    addr = "Manually placed pin at ${"%.6f".format(lat)}, ${"%.6f".format(lon)}"
                 }
                 .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp)),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
@@ -57,7 +79,7 @@ fun LocationDetailsScreen(
                 Box(contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(Icons.Default.LocationOn, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                        Text("Map not available in this demo; tap to adjust pin", style = MaterialTheme.typography.bodyMedium)
+                        Text("Map not available in this build; tap to adjust pin", style = MaterialTheme.typography.bodyMedium)
                         Text("Lat: ${"%.6f".format(lat)}  Lon: ${"%.6f".format(lon)}", style = MaterialTheme.typography.bodySmall)
                     }
                 }
@@ -70,6 +92,10 @@ fun LocationDetailsScreen(
                     Text("Lon: ${"%.6f".format(lon)}", style = MaterialTheme.typography.bodySmall)
                     OutlinedTextField(value = description, onValueChange = { description = it }, modifier = Modifier.fillMaxWidth(), placeholder = { Text("Add description or notes...") })
                 }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            if (!NetworkChecker.isOnline(context = context)) {
+                Text("No internet — you'll need network to contact authorities later.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }

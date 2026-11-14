@@ -21,7 +21,6 @@ import androidx.compose.ui.unit.sp
 import com.arin.civicreport.data.Repository
 import com.arin.civicreport.model.IncidentStatus
 import com.arin.civicreport.ui.util.Prefs
-import com.arin.civicreport.R
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -114,7 +113,6 @@ private fun ReportCard(
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
-    val context = LocalContext.current
     var showMenu by remember { mutableStateOf(false) }
 
     Card(
@@ -132,10 +130,10 @@ private fun ReportCard(
             }
             Box {
                 val badgeColor = when (report.status) {
-                    com.arin.civicreport.model.IncidentStatus.Sent -> MaterialTheme.colorScheme.primary
-                    com.arin.civicreport.model.IncidentStatus.Pending -> Color(0xFFFFA600)
-                    com.arin.civicreport.model.IncidentStatus.Failed -> MaterialTheme.colorScheme.error
-                    com.arin.civicreport.model.IncidentStatus.Draft -> MaterialTheme.colorScheme.secondaryContainer
+                    IncidentStatus.Sent -> MaterialTheme.colorScheme.primary
+                    IncidentStatus.Pending -> Color(0xFFFFA600)
+                    IncidentStatus.Failed -> MaterialTheme.colorScheme.error
+                    IncidentStatus.Draft -> MaterialTheme.colorScheme.secondaryContainer
                 }
                 Surface(color = badgeColor, shape = MaterialTheme.shapes.small) {
                     Text(

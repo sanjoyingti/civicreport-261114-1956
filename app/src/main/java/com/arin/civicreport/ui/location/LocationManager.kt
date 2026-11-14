@@ -14,6 +14,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 data class CurrentLocation(
@@ -23,7 +25,7 @@ data class CurrentLocation(
 )
 
 class LocationManager(context: Context) {
-    private val fused: FusedLocationProviderClient = LocationServices.getFusedLocationProviderClient(context)
+    private val fused: FusedLocationProviderClient = LocationServices.getFusedLocationClient(context)
     private val geocoder = Geocoder(context, java.util.Locale.getDefault())
 
     private val _state = MutableStateFlow<LocationState>(LocationState.Idle)
@@ -46,29 +48,40 @@ class LocationManager(context: Context) {
         )
     }
 
+    fun observeState() = _state.catch { e ->
+        _state.value = LocationState.Error("Location error: ${e.message}")
+        throw e
+    }
+
     suspend fun getCurrentLocation(): CurrentLocation = withContext(Dispatchers.IO) {
-        if (_state.value !is LocationState.Idle) {
-            _state.value = LocationState.Loading("Getting your location...")
-        }
+        _state.value = LocationState.Loading("Getting your location...")
+        val ctx = ApplicationLifecycle.context()
         val hasFine = ContextCompat.checkSelfPermission(
-            LocationManagerContextHolder.context,
+            ctx,
             Manifest.permission.ACCESS_FINE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
         val hasCoarse = ContextCompat.checkSelfPermission(
-            LocationManagerContextHolder.context,
+            ctx,
             Manifest.permission.ACCESS_COARSE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
 
-        val pos = if (hasFine || hasCoarse) {
+        var pos = if (hasFine || hasCoarse) {
             try {
-                fused.lastLocation
-            } catch (e: SecurityException) { null }
+                fused.lastLocation.await()
+            } catch (e: Exception) { null }
         } else {
             null
         }
 
-        val network = NetworkChecker.isOnline(LocationManagerContextHolder.context)
-        val resolved = if (pos != null) {
+        if (pos == null) {
+            val network = NetworkChecker.isOnline(ctx)
+            if (network) {
+                _state.value = LocationState.Error("No GPS signal and no network to find your address. Tap the map to place the pin manually.")
+            } else {
+                _state.value = LocationState.Error("No internet connection. Please tap the map to place the pin manually.")
+            }
+            CurrentLocation(0.0, 0.0, "", "", "", "", "")
+        } else {
             _state.value = LocationState.Loading("Finding your address...")
             val addr = try {
                 geocoder.getFromLocation(pos.latitude, pos.longitude, 1)?.firstOrNull()
@@ -76,15 +89,7 @@ class LocationManager(context: Context) {
             val resolvedLoc = setAddress(addr)
             _state.value = LocationState.Ready(resolvedLoc)
             resolvedLoc
-        } else {
-            if (network) {
-                _state.value = LocationState.Error("No GPS signal and no network to find your address. Tap the map to place the pin manually.")
-            } else {
-                _state.value = LocationState.Error("No internet connection. Please tap the map to place the pin manually.")
-            }
-            CurrentLocation(0.0, 0.0, "", "", "", "", "")
         }
-        resolved
     }
 
     suspend fun reverseGeocode(latitude: Double, longitude: Double): CurrentLocation = withContext(Dispatchers.IO) {
@@ -97,7 +102,9 @@ class LocationManager(context: Context) {
         resolved
     }
 
-    object LocationManagerContextHolder {
-        lateinit var context: Context
+    object ApplicationLifecycle {
+        @Volatile private var context: android.content.Context? = null
+        fun register(appCtx: android.content.Context) { context = appCtx }
+        fun context(): android.content.Context = context ?: throw IllegalStateException("context not set")
     }
 }

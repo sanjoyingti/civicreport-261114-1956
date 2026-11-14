@@ -96,7 +96,11 @@ fun ReviewAndSendScreen(
                         }
                         onSaveAndSend(selected.sorted(), method)
                         sending = false
-                        android.app.AlertDialog.Builder(context).setTitle("Sent").setMessage("Report sent to ${selected.size} authority(ies).").setPositiveButton("OK") { _, _ -> }.show()
+                        android.app.AlertDialog.Builder(context)
+                            .setTitle("Sent")
+                            .setMessage("Report sent to ${selected.size} authority(ies).")
+                            .setPositiveButton("OK") { _, _ -> }
+                            .show()
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),
@@ -156,9 +160,21 @@ private fun sendToAuthority(context: Context, a: com.arin.civicreport.model.Auth
     } else null
 
     mail?.let {
-        try { context.startActivity(it) } catch (e: Exception) { android.app.AlertDialog.Builder(context).setTitle("No email app").setMessage("Install an email app to send by email.").setPositiveButton("OK") { _, _ -> }.show() }
+        try { context.startActivity(it) } catch (e: Exception) {
+            android.app.AlertDialog.Builder(context)
+                .setTitle("No email app")
+                .setMessage("Install an email app to send by email.")
+                .setPositiveButton("OK") { _, _ -> }
+                .show()
+        }
     }
     sms?.let {
-        try { context.startActivity(it) } catch (e: Exception) { android.app.AlertDialog.Builder(context).setTitle("No SMS app").setMessage("Install an SMS app to send by SMS.").setPositiveButton("OK") { _, _ -> }.show() }
+        try { context.startActivity(it) } catch (e: Exception) {
+            android.app.AlertDialog.Builder(context)
+                .setTitle("No SMS app")
+                .setMessage("Install an SMS app to send by SMS.")
+                .setPositiveButton("OK") { _, _ -> }
+                .show()
+        }
     }
 }

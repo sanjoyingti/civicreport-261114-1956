@@ -1,27 +1,31 @@
 package com.arin.civicreport.ui.screens
 
 import android.net.Uri
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.camera.view.PreviewView
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.CircleOutline
+import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.arin.civicreport.data.Repository
+import com.arin.civicreport.ui.media.CameraManager
 import com.arin.civicreport.ui.util.PermissionManager
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CaptureScreen(
-    repo: Repository,
     incidentTypes: List<String>,
     permissionManager: PermissionManager,
     onCaptureSuccess: (Uri, String) -> Unit,
@@ -30,40 +34,71 @@ fun CaptureScreen(
     onRetryCamera: () -> Unit
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     var capturedUri by remember { mutableStateOf<Uri?>(null) }
     var captureMode by remember { mutableStateOf<CaptureMode>(None) }
+    val cameraManager = remember { CameraManager(context) }
+    var previewView by remember { mutableStateOf<PreviewView?>(null) }
+    var cameraReady by remember { mutableStateOf(false) }
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri?.let { onChooseGallery(it, if (captureMode == VideoMode) "video" else "photo") }
+    }
+
+    LaunchedEffect(Unit) {
+        cameraManager.initializeCamera(lifecycleOwner) {
+            cameraReady = true
+        }
+    }
 
     fun takePhoto() {
         if (!permissionManager.hasCamera(context)) {
-            permissionManager.requestPermission(android.Manifest.permission.CAMERA)
+            permissionManager.requestCameraPermission()
             onCameraError("Camera permission denied")
             return
         }
-        capturedUri = Uri.fromFile(java.io.File(context.externalFilesDir("media"), "photo_${System.currentTimeMillis()}.jpg"))
-        onCaptureSuccess(capturedUri!!, "photo")
+        if (!cameraReady) {
+            onCameraError("Camera not ready")
+            return
+        }
+        previewView?.let {
+            cameraManager.takePhoto(it) { uri ->
+                capturedUri = uri
+                onCaptureSuccess(uri, "photo")
+            } onError: (String) -> Unit -> {
+                onCameraError("Camera error: $it")
+            }
+        }
     }
 
     fun takeVideo() {
         if (!permissionManager.hasCamera(context)) {
-            permissionManager.requestPermission(android.Manifest.permission.CAMERA)
+            permissionManager.requestCameraPermission()
             onCameraError("Camera permission denied")
             return
         }
-        capturedUri = Uri.fromFile(java.io.File(context.externalFilesDir("media"), "video_${System.currentTimeMillis()}.mp4"))
-        onCaptureSuccess(capturedUri!!, "video")
+        if (!cameraReady) {
+            onCameraError("Camera not ready")
+            return
+        }
+        previewView?.let {
+            cameraManager.startVideo(it) { uri ->
+                capturedUri = uri
+                onCaptureSuccess(uri, "video")
+            } onError: (String) -> Unit -> {
+                onCameraError("Camera error: $it")
+            }
+        }
     }
 
     fun openGallery() {
         if (!permissionManager.hasReadMedia(context) && !permissionManager.hasReadMediaForLegacy(context)) {
-            permissionManager.storageLauncher.launch(arrayOf(android.Manifest.permission.READ_EXTERNAL_STORAGE, android.Manifest.permission.READ_MEDIA_IMAGES, android.Manifest.permission.READ_MEDIA_VIDEO))
+            permissionManager.requestLocationPermissions()
             onCameraError("Gallery permission denied")
             return
         }
-        val intent = android.content.Intent(android.content.Intent.ACTION_PICK, if (captureMode == VideoMode) android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI else android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI).apply {
-            type = if (captureMode == VideoMode) "video/*" else "image/*"
-        }
-        // In a real activity we would startForResult here; here we just show a hint since this composable has no launcher
-        onChooseGallery(Uri.fromFile(java.io.File(context.externalFilesDir("media"), "gallery_${System.currentTimeMillis()}.${if (captureMode == VideoMode) "mp4" else "jpg"}")), if (captureMode == VideoMode) "video" else "photo")
+        launcher.launch(
+            if (captureMode == VideoMode) "video/*" else "image/*"
+        )
     }
 
     Scaffold(topBar = {
@@ -73,15 +108,33 @@ fun CaptureScreen(
             .fillMaxSize()
             .padding(padding)
             .padding(16.dp)) {
+            Text("Viewfinder", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(240.dp)
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center
+            ) {
+                if (!cameraReady) {
+                    CircularProgressIndicator()
+                }
+                PreviewView(
+                    modifier = Modifier.fillMaxSize(),
+                    onAttachedToWindow = { previewView = it },
+                    onDetachedFromWindow = { previewView = null }
+                )
+            }
+            Spacer(modifier = Modifier.height(16.dp))
             if (capturedUri != null) {
                 Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                     Box(contentAlignment = Alignment.Center) {
-                        Text("Preview not available in this demo; media saved.", style = MaterialTheme.typography.bodyMedium)
+                        Text("Preview: ${capturedUri?.lastPathSegment}", style = MaterialTheme.typography.bodyMedium)
                     }
                 }
                 Spacer(modifier = Modifier.height(12.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    Button(onClick = { captureMode = None; capturedUri = null }) { Text("Retake"); }
+                    Button(onClick = { captureMode = None; capturedUri = null }) { Text("Retake") }
                     Button(onClick = { onCaptureSuccess(capturedUri!!, if (captureMode == VideoMode) "video" else "photo") }) { Text("Confirm") }
                 }
             } else {
@@ -90,7 +143,11 @@ fun CaptureScreen(
                     SelectionRow(mode = CaptureMode.PhotoMode, selected = captureMode == CaptureMode.PhotoMode, onClick = { captureMode = CaptureMode.PhotoMode })
                     SelectionRow(mode = CaptureMode.VideoMode, selected = captureMode == CaptureMode.VideoMode, onClick = { captureMode = CaptureMode.VideoMode })
                     Button(
-                        onClick = { if (permissionManager.hasCamera(context)) { if (captureMode == CaptureMode.VideoMode) takeVideo() else takePhoto() } else permissionManager.requestPermission(android.Manifest.permission.CAMERA) },
+                        onClick = {
+                            if (permissionManager.hasCamera(context) && cameraReady) {
+                                if (captureMode == CaptureMode.VideoMode) takeVideo() else takePhoto()
+                            } else permissionManager.requestCameraPermission()
+                        },
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Icon(Icons.Default.CameraAlt, contentDescription = null); Spacer(modifier = Modifier.width(8.dp)); Text(if (captureMode == CaptureMode.VideoMode) "Record Video" else "Take Photo")

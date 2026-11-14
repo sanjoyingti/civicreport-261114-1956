@@ -6,8 +6,8 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
-import com.arin.civicreport.data.Report
 import com.arin.civicreport.data.Repository
+import com.arin.civicreport.model.IncidentStatus
 import com.arin.civicreport.model.Report as ReportModel
 import com.arin.civicreport.ui.screens.HomeScreen
 import com.arin.civicreport.ui.screens.IncidentSelectorScreen
@@ -37,8 +37,8 @@ fun AppNavigation(
                 prefs = prefs,
                 onOpenSettings = { navController.navigate(NavigationRoute.SETTINGS) },
                 onReportNew = {
-                    navController.navigate(NavigationRoute.INCIDENT_SELECTOR)
                     repo.seedAuthorities().let {}
+                    navController.navigate(NavigationRoute.INCIDENT_SELECTOR)
                 },
                 onOpenReport = { id ->
                     navController.navigate("${NavigationRoute.REPORT_VIEW}$id")
@@ -58,29 +58,16 @@ fun AppNavigation(
         ) { backStackEntry ->
             val types = backStackEntry.arguments?.getString("types")?.split("-") ?: emptyList()
             CaptureScreen(
-                repo = repo,
                 incidentTypes = types,
                 permissionManager = permissionManager,
                 onCaptureSuccess = { uri, mediaType ->
-                    val lat = navController.previousBackStackEntry?.savedStateHandle?.get<Double>("lat") ?: 0.0
-                    val lon = navController.previousBackStackEntry?.savedStateHandle?.get<Double>("lon") ?: 0.0
-                    val address = navController.previousBackStackEntry?.savedStateHandle?.getString("address") ?: ""
                     navController.previousBackStackEntry?.savedStateHandle?.set("mediaUri", uri.toString())
                     navController.previousBackStackEntry?.savedStateHandle?.set("mediaType", mediaType)
-                    navController.previousBackStackEntry?.savedStateHandle?.set("lat", lat)
-                    navController.previousBackStackEntry?.savedStateHandle?.set("lon", lon)
-                    navController.previousBackStackEntry?.savedStateHandle?.set("address", address)
                     navController.navigate(NavigationRoute.LOCATION_DETAILS)
                 },
                 onChooseGallery = { uri, mediaType ->
-                    val lat = navController.previousBackStackEntry?.savedStateHandle?.get<Double>("lat") ?: 0.0
-                    val lon = navController.previousBackStackEntry?.savedStateHandle?.get<Double>("lon") ?: 0.0
-                    val address = navController.previousBackStackEntry?.savedStateHandle?.getString("address") ?: ""
                     navController.previousBackStackEntry?.savedStateHandle?.set("mediaUri", uri.toString())
                     navController.previousBackStackEntry?.savedStateHandle?.set("mediaType", mediaType)
-                    navController.previousBackStackEntry?.savedStateHandle?.set("lat", lat)
-                    navController.previousBackStackEntry?.savedStateHandle?.set("lon", lon)
-                    navController.previousBackStackEntry?.savedStateHandle?.set("address", address)
                     navController.navigate(NavigationRoute.LOCATION_DETAILS)
                 },
                 onCameraError = { message -> },
@@ -106,11 +93,14 @@ fun AppNavigation(
         }
         composable(NavigationRoute.AUTHORITY) {
             val vm = androidx.lifecycle.viewmodel.compose.viewModel<ReportViewModel>()
+            val types = navController.previousBackStackEntry?.savedStateHandle?.getString("types")?.split("-") ?: emptyList()
+            val state = navController.previousBackStackEntry?.savedStateHandle?.getString("state") ?: "Maharashtra"
             AuthorityFinderScreen(
-                incidentTypes = navController.previousBackStackEntry?.savedStateHandle?.getString("types")?.split("-") ?: emptyList(),
+                incidentTypes = types,
                 latitude = navController.previousBackStackEntry?.savedStateHandle?.get<Double>("lat") ?: 0.0,
                 longitude = navController.previousBackStackEntry?.savedStateHandle?.get<Double>("lon") ?: 0.0,
                 address = navController.previousBackStackEntry?.savedStateHandle?.getString("address") ?: "",
+                state = state,
                 onContinue = { authorities ->
                     vm.updateAuthorities(authorities)
                     navController.navigate(NavigationRoute.REVIEW_SEND)
@@ -118,34 +108,42 @@ fun AppNavigation(
             )
         }
         composable(NavigationRoute.REVIEW_SEND) {
+            val vm = androidx.lifecycle.viewmodel.compose.viewModel<ReportViewModel>()
+            val types = navController.previousBackStackEntry?.savedStateHandle?.getString("types")?.split("-") ?: emptyList()
             ReviewAndSendScreen(
-                incidentTypes = navController.previousBackStackEntry?.savedStateHandle?.getString("types")?.split("-") ?: emptyList(),
+                incidentTypes = types,
                 mediaUri = navController.previousBackStackEntry?.savedStateHandle?.getString("mediaUri"),
                 mediaType = navController.previousBackStackEntry?.savedStateHandle?.getString("mediaType") ?: "photo",
                 latitude = navController.previousBackStackEntry?.savedStateHandle?.get<Double>("lat") ?: 0.0,
                 longitude = navController.previousBackStackEntry?.savedStateHandle?.get<Double>("lon") ?: 0.0,
                 address = navController.previousBackStackEntry?.savedStateHandle?.getString("address") ?: "",
-                authorities = androidx.lifecycle.viewmodel.compose.viewModel<ReportViewModel>().selectedAuthorities(),
+                authorities = vm.reportSelectedAuthorities(),
                 sendMethod = prefs.defaultSendMethod,
                 onBack = { navController.popBackStack(NavigationRoute.AUTHORITY, inclusive = false) },
                 onSaveAndSend = { selectedAuths, method ->
                     vm.updateAuthorities(selectedAuths)
-                    navController.navigate("${NavigationRoute.REPORT_VIEW}$vm.reportId")
-                    repo.saveReport(
-                        ReportModel(
-                            id = vm.reportId, incidentTypes = navController.previousBackStackEntry?.savedStateHandle?.getString("types")?.split("-") ?: emptyList(),
-                            mediaUris = listOf(navController.previousBackStackEntry?.savedStateHandle?.getString("mediaUri") ?: ""),
-                            mediaType = navController.previousBackStackEntry?.savedStateHandle?.getString("mediaType") ?: "photo",
-                            timestamp = System.currentTimeMillis(),
-                            latitude = navController.previousBackStackEntry?.savedStateHandle?.get<Double>("lat") ?: 0.0,
-                            longitude = navController.previousBackStackEntry?.savedStateHandle?.get<Double>("lon") ?: 0.0,
-                            address = navController.previousBackStackEntry?.savedStateHandle?.getString("address") ?: "",
-                            city = "", district = "", state = "", pincode = "",
-                            description = "", status = ReportModel.IncidentStatus.Sent,
-                            sentAuthorities = selectedAuths, lastUpdated = System.currentTimeMillis(),
-                            sendMethod = method
-                        )
+                    val newReport = ReportModel(
+                        id = vm.reportId.value,
+                        incidentTypes = types,
+                        mediaUris = listOf(navController.previousBackStackEntry?.savedStateHandle?.getString("mediaUri") ?: ""),
+                        mediaType = navController.previousBackStackEntry?.savedStateHandle?.getString("mediaType") ?: "photo",
+                        timestamp = System.currentTimeMillis(),
+                        latitude = navController.previousBackStackEntry?.savedStateHandle?.get<Double>("lat") ?: 0.0,
+                        longitude = navController.previousBackStackEntry?.savedStateHandle?.get<Double>("lon") ?: 0.0,
+                        address = navController.previousBackStackEntry?.savedStateHandle?.getString("address") ?: "",
+                        city = navController.previousBackStackEntry?.savedStateHandle?.getString("city") ?: "",
+                        district = navController.previousBackStackEntry?.savedStateHandle?.getString("district") ?: "",
+                        state = navController.previousBackStackEntry?.savedStateHandle?.getString("state") ?: "Maharashtra",
+                        pincode = navController.previousBackStackEntry?.savedStateHandle?.getString("pincode") ?: "",
+                        description = navController.previousBackStackEntry?.savedStateHandle?.getString("description") ?: "",
+                        status = IncidentStatus.Sent,
+                        sentAuthorities = selectedAuths,
+                        lastUpdated = System.currentTimeMillis(),
+                        sendMethod = method
                     )
+                    vm.setReportId(newReport.id)
+                    repo.saveReport(newReport)
+                    navController.navigate("${NavigationRoute.REPORT_VIEW}${newReport.id}")
                 }
             )
         }

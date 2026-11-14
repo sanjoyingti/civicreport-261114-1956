@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!--
+      This file used to define Material 3 theme names, but Theme.Material3.DayNight.NoActionBar
+      was declared multiple times, which breaks the resource merger. The app's own theme is now
+      defined in themes.xml. This styles.xml only provides aliases used by old build templates.
+    -->
+
+    <style name="Theme.AppCompat.Light.NoActionBar" parent="@android:style/Theme.Material.Light.NoActionBar" />
+    <style name="Theme.AppCompat.NoActionBar" parent="@android:style/Theme.Material.NoActionBar" />
+
+</resources>

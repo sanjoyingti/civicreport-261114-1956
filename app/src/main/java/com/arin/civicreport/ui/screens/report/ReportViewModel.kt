@@ -18,11 +18,17 @@ class ReportViewModel : ViewModel() {
     private val _selectedAuthorities = MutableStateFlow<List<AuthorityModel>>(emptyList())
     val selectedAuthorities: StateFlow<List<AuthorityModel>> = _selectedAuthorities.asStateFlow()
 
+    fun setReportId(reportId: Long) {
+        _reportId.value = reportId
+    }
+
     fun updateAuthorities(authorities: List<AuthorityModel>) {
         _selectedAuthorities.value = authorities
     }
 
-    fun reportId(reportId: Long) {
-        _reportId.value = reportId
+    fun reportSelectedAuthorities(): List<AuthorityModel> = _selectedAuthorities.value
+
+    fun addReportIdToSavedAuthorities(savedIds: List<String>) {
+        _selectedAuthorities.value = _selectedAuthorities.value.map { it.copy(id = "${it.id}_${savedIds.indexOf(it.id)}") }
     }
 }

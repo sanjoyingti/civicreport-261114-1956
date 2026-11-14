@@ -26,11 +26,28 @@ fun AuthorityFinderScreen(
     latitude: Double,
     longitude: Double,
     address: String,
+    state: String,
     onContinue: (List<AuthorityModel>) -> Unit
 ) {
     val context = LocalContext.current
     var selected by remember { mutableStateOf<List<AuthorityModel>>(emptyList()) }
-    val authorities = remember { loadAuthorities(context, incidentTypes, "Maharashtra") }
+    var loading by remember { mutableStateOf(true) }
+    var authorities by remember { mutableStateOf<List<AuthorityModel>>(emptyList()) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(incidentTypes, state) {
+        try {
+            loading = true
+            val repo = Repository(com.arin.civicreport.data.CivicDatabase.getInstance(context))
+            repo.seedAuthorities()
+            val tag = incidentTypes.firstOrNull() ?: "pothole"
+            authorities = repo.getAuthoritiesForIncident(tag, state, "")
+        } catch (e: Exception) {
+            error = "Could not load authorities: ${e.message}"
+        } finally {
+            loading = false
+        }
+    }
 
     Scaffold(topBar = {
         TopAppBar(title = { Text("Concern Authorities", fontWeight = FontWeight.Bold) })
@@ -39,31 +56,39 @@ fun AuthorityFinderScreen(
             .fillMaxSize()
             .padding(padding)
             .padding(16.dp)) {
-            Text("Auto-detected jurisdiction: Maharashtra (local)", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Auto-detected jurisdiction: $state (local)", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text("App matches ${incidentTypes.joinToString(" or ")} incidents to relevant authorities. Select who you want to notify.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(modifier = Modifier.height(12.dp))
-            LazyColumn {
-                items(authorities) { a ->
-                    val isSelected = selected.contains(a.id)
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { selected = if (isSelected) selected - a.id else selected + a.id }
-                            .border(2.dp, if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent, RoundedCornerShape(12.dp)),
-                        colors = CardDefaults.cardColors(containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface)
-                    ) {
-                        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                if (isSelected) Icons.Default.CheckCircle else Icons.Default.CircleOutline,
-                                contentDescription = null,
-                                tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
-                                modifier = Modifier.size(24.dp)
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(a.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                Text("Level: ${a.level}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text("Phone: ${a.phone}  Email: ${a.email}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (loading) {
+                CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
+            } else if (error != null) {
+                Text("Error: $error", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
+            } else if (authorities.isEmpty()) {
+                Text("No authorities found for this incident and location. Add custom authorities in Settings.", style = MaterialTheme.typography.bodyMedium)
+            } else {
+                LazyColumn {
+                    items(authorities) { a ->
+                        val isSelected = selected.contains(a.id)
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { selected = if (isSelected) selected - a.id else selected + a.id }
+                                .border(2.dp, if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent, RoundedCornerShape(12.dp)),
+                            colors = CardDefaults.cardColors(containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface)
+                        ) {
+                            Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    if (isSelected) Icons.Default.CheckCircle else Icons.Default.CircleOutline,
+                                    contentDescription = null,
+                                    tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(a.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                    Text("Level: ${a.level}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text("Phone: ${a.phone}  Email: ${a.email}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
                             }
                         }
                     }
@@ -84,23 +109,5 @@ fun AuthorityFinderScreen(
                 Text("Continue")
             }
         }
-    }
-}
-
-private fun loadAuthorities(context: Context, types: List<String>, state: String): List<com.arin.civicreport.model.Authority> {
-    // Use the Repository when an activity is available; otherwise return a small default list.
-    return try {
-        val repo = com.arin.civicreport.data.CivicDatabase.getInstance(context).let {
-            com.arin.civicreport.data.Repository(it)
-        }
-        val tag = types.firstOrNull() ?: "pothole"
-        repo.getAuthoritiesForIncident(tag, state, "").also { repo.seedAuthorities() }
-    } catch (e: Exception) {
-        // fallback default authorities
-        listOf(
-            com.arin.civicreport.model.Authority("mh_cm_office", "Chief Minister Office, Maharashtra", "020 2612 8060", "cmo@maharashtra.gov.in", "State", emptyList(), listOf("Maharashtra"), emptyList(), 5),
-            com.arin.civicreport.model.Authority("pmo_india", "Prime Minister's Office (PMO)", "1553", "pmo@pmindia.gov.in", "Central", emptyList(), emptyList(), emptyList(), 10),
-            com.arin.civicreport.model.Authority("maharashtra_mumbai_municipal", "BMC Engineering Dept", "15331", "complaints@bmcgov.com", "Local", emptyList(), listOf("Maharashtra"), listOf("mumbai"), 2)
-        )
     }
 }

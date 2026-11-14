@@ -4,11 +4,17 @@ import android.content.Context
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
-import androidx.camera.core.*
+import androidx.camera.core.CameraSelector
+import androidx.camera.core.ImageCapture
+import androidx.camera.core.ImageCaptureException
+import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.video.MediaStoreOutputOptions
+import androidx.camera.video.VideoCapture
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
+import androidx.lifecycle.LifecycleOwner
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -21,35 +27,45 @@ class CameraManager(private val context: Context) {
     private var cameraProviderFuture: androidx.lifecycle.LifecycleProvider? = null
     private var cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
     private val cameraExecutor: ExecutorService = Executors.newSingleThreadExecutor()
-    private var currentPhotoCapture: PhotoCapture? = null
-    private var currentVideoCapture: VideoCapture<MediaStoreOutput>? = null
+    private var currentPhotoCapture: ImageCapture? = null
+    private var currentVideoCapture: VideoCapture<MediaStoreOutputOptions>? = null
+    private var preview: Preview? = null
 
-    fun startCamera(previewView: PreviewView, onCameraInitialized: () -> Unit) {
+    fun initializeCamera(lifecycleOwner: LifecycleOwner, onReady: () -> Unit) {
         val future = ProcessCameraProvider.getInstance(context)
         future.addListener({
             val provider = future.get()
-            val preview = Preview.Builder().build().also {
-                it.setSurfaceProvider(previewView.surfaceProvider)
+            preview = Preview.Builder().build().also {
+                it.setSurfaceProvider(lifecycleOwner.findViewTreeRoot()?.findViewWithTag<PreviewView>("preview")?.surfaceProvider)
             }
             try {
                 provider.unbindAll()
-                provider.bindToLifecycle(context, cameraSelector, preview)
-                onCameraInitialized()
+                provider.bindToLifecycle(lifecycleOwner, cameraSelector, preview)
             } catch (e: Exception) {
                 e.printStackTrace()
             }
+            cameraProviderFuture = lifecycleOwner as? androidx.lifecycle.LifecycleProvider
+            onReady()
         }, ContextCompat.getMainExecutor(context))
-        cameraProviderFuture = context
     }
 
-    fun bindTakePhoto(previewView: PreviewView, onImage: (Uri) -> Unit): PhotoCapture {
+    fun takePhoto(
+        previewView: PreviewView,
+        onImage: (Uri) -> Unit,
+        onError: (String) -> Unit
+    ) {
         val photoCapture = ImageCapture.Builder().apply {
             setTargetRotation(previewView.rotation)
         }.build()
         currentPhotoCapture = photoCapture
         val photo = object : ImageCapture.OnImageCapturedCallback() {
             override fun onCaptureSuccess(image: ImageProxy) {
-                val bytes = image.use { it.planes[0].buffer.toByteArray() }
+                val bytes = image.use {
+                    val bb = it.planes[0].buffer
+                    val arr = ByteArray(bb.remaining())
+                    bb.get(arr)
+                    arr
+                }
                 val file = saveImageFile()
                 file.writeBytes(bytes)
                 val uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -60,70 +76,62 @@ class CameraManager(private val context: Context) {
             }
 
             override fun onError(exception: ImageCaptureException) {
+                onError(exception.message ?: "Capture failed")
                 super.onError(exception)
             }
         }
         photoCapture.takePicture(cameraExecutor, photo)
-        return photoCapture
     }
 
-    fun bindVideoCapture(previewView: PreviewView): VideoCapture<MediaStoreOutput> {
-        val videoCapture = VideoCapture.withOutput(
-            MediaStoreOutputOptions.Builder(
-                MediaStoreHelper.videoContentUri(context),
-                MediaStore.RELATIVE_PATH,
-                MediaStore.Video.Media.RELATIVE_PATH
-            ).build()
-        )
+    fun startVideo(previewView: PreviewView, onVideoReady: (Uri) -> Unit, onError: (String) -> Unit) {
+        val name = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US).format(Date()) + "_record.mp4"
+        val contentUri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            MediaStoreOutputOptions.Builder(context.contentResolver.uriForMediaStoreVideo(name), MediaStore.RELATIVE_PATH, "CivicReport/recorded").build()
+        } else {
+            val file = File(context.externalFilesDir("media") ?: context.filesDir, "video_${System.currentTimeMillis()}.mp4")
+            file.toUri()
+        }
+        val videoCapture = VideoCapture.withOutput(contentUri)
         currentVideoCapture = videoCapture
-        return videoCapture
+        videoCapture.setOnVideoStartCallback(
+            ContextCompat.getMainExecutor(context),
+            object : VideoCapture.OnVideoStartCallback() {
+                override fun onVideoStart() {
+                    super.onVideoStart()
+                    onVideoReady(contentUri)
+                }
+            }
+        )
+        val video = object : VideoCapture.OnVideoStoppedCallback() {
+            override fun onVideoStopped() {
+                currentVideoCapture = null
+                super.onVideoStopped()
+            }
+        }
+        videoCapture.stop(video)
+    }
+
+    fun stopVideo(onVideoReady: (Uri) -> Unit, onError: (String) -> Unit) {
+        currentVideoCapture?.stop(object : VideoCapture.OnVideoStoppedCallback() {
+            override fun onVideoStopped() {
+                currentVideoCapture = null
+                super.onVideoStopped()
+            }
+        })
+    }
+
+    fun releaseCamera() {
+        preview?.clearSurfaceProvider()
+        currentVideoCapture?.stop(object : VideoCapture.OnVideoStoppedCallback() {
+            override fun onVideoStopped() {
+                super.onVideoStopped()
+            }
+        })
     }
 
     private fun saveImageFile(): File {
-        val dir = File(context.getExternalFilesDir(null), "media").also { it.mkdirs() }
+        val dir = File(context.externalFilesDir("media") ?: context.filesDir, "media").also { it.mkdirs() }
         val name = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US).format(Date()) + "_capture.jpg"
         return File(dir, name)
-    }
-
-    fun bindToLifecycle(lifecycleProvider: androidx.lifecycle.LifecycleOwner) {
-        val future = ProcessCameraProvider.getInstance(context)
-        future.addListener({
-            val provider = future.get()
-            provider.unbindAll()
-        }, ContextCompat.getMainExecutor(context))
-    }
-}
-
-object MediaStoreHelper {
-    enum class MediaKind { Photo, Video }
-
-    fun saveToMediaStore(context: Context, source: File, kind: MediaKind): Uri {
-        val resolver = context.contentResolver
-        val contentValues = android.content.ContentValues().apply {
-            if (kind == MediaKind.Photo) {
-                put(MediaStore.Images.Media.DISPLAY_NAME, "report_${System.currentTimeMillis()}.jpg")
-                put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
-                put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/CivicReport")
-            } else {
-                put(MediaStore.Video.Media.DISPLAY_NAME, "report_${System.currentTimeMillis()}.mp4")
-                put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
-                put(MediaStore.Video.Media.RELATIVE_PATH, "Movies/CivicReport")
-            }
-        }
-        val collection = if (kind == MediaKind.Photo) MediaStore.Images.Media.EXTERNAL_CONTENT_URI
-        else MediaStore.Video.Media.EXTERNAL_CONTENT_URI
-        val uri = resolver.insert(collection, contentValues) ?: source.toUri()
-        resolver.openOutputStream(uri)?.use { out ->
-            source.inputStream().use { `in` -> out.write(`in`.readAllBytes()) }
-        }
-        return uri
-    }
-
-    fun photoContentUri(context: Context): Uri {
-        return MediaStore.Images.Media.EXTERNAL_CONTENT_URI
-    }
-
-    fun videoContentUri(context: Context): Uri {
-        return MediaStore.Video.Media.EXTERNAL_CONTENT_URI
     }
 }
