@@ -71,12 +71,12 @@
     <string name="storage_permission_rationale">Storage access is needed to save captured media files.</string>
     <string name="storage_permission_denied">Storage permission denied. Media cannot be saved.</string>
     <string name="sms_permission_rationale">SMS permission is needed to send SMS messages to authorities.</string>
-    <string name="sms_permission_denied">SMS permission denied. Choose email instead.</string>
+    <string name="sms_permission_denied">Choose email instead.</string>
     <string name="call_permission_rationale">Phone access is needed to dial authority phone numbers.</string>
     <string name="call_permission_denied">Call permission denied. Copy the number instead.</string>
     <string name="post_notifications_rationale">Notification permission is needed to show send confirmations.</string>
     <string name="camera_unavailable">Camera is unavailable. Please check that no other app is using it.</string>
-    <string name="camera_error">Camera error: %s</string>
+    <string name="camera_error">Camera error occurred.</string>
     <string name="gallery_unavailable">Gallery access denied or unavailable.</string>
     <string name="media_unsupported">This file type is not supported.</string>
     <string name="camera_open_failed">Could not open camera. Please try again.</string>

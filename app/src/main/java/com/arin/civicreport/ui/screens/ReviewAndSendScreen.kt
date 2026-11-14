@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.arin.civicreport.model.IncidentStatus
 import com.arin.civicreport.ui.util.PermissionManager
 
 @OptIn(ExperimentalMaterial3Api::class)
