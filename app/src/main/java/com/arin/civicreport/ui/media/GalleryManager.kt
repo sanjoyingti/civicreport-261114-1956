@@ -61,9 +61,9 @@ object GalleryManager {
     }
 
     private fun parseDegrees(raw: String): Double {
-        val parts = raw.split(",").map { it.trim().toFloat() }
+        val parts = raw.split(",").map { it.trim().toDouble() }
         if (parts.size < 3) return raw.toDoubleOrNull() ?: 0.0
-        return parts[0] + parts[1] / 60.0f + parts[2] / 3600.0f
+        return parts[0] + parts[1] / 60.0 + parts[2] / 3600.0
     }
 
     private fun toDegrees(value: Double, ref: String?): Double {

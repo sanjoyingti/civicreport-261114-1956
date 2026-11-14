@@ -11,11 +11,7 @@ import androidx.camera.core.Preview
 import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
-import androidx.camera.video.FileOutputOptions
-import androidx.camera.video.Quality
-import androidx.camera.video.QualitySelector
-import androidx.camera.video.Recording
-import androidx.camera.video.VideoCapture
+import androidx.camera.video.*
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.lifecycle.LifecycleOwner
@@ -32,7 +28,7 @@ class CameraManager(private val context: Context) {
     private var cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
     private var preview: Preview? = null
     private var imageCapture: ImageCapture? = null
-    private var videoCapture: VideoCapture? = null
+    private var videoCapture: VideoCapture<VideoRecorded>? = null
     private var videoRecording: Recording? = null
     private val cameraExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private val fileProviderAuthority = "${context.packageName}.fileprovider"
@@ -66,18 +62,17 @@ class CameraManager(private val context: Context) {
         }, ContextCompat.getMainExecutor(context))
     }
 
-    fun takePhoto(previewView: PreviewView, onImage: (Uri) -> Unit, onError: (String) -> Unit) {
+    fun takePhoto(previewView: androidx.camera.view.PreviewView, onImage: (Uri) -> Unit, onError: (String) -> Unit) {
         val file = getPhotoFile()
         val output = ImageCapture.OutputFileOptions.Builder(file).build()
         imageCapture?.takePicture(
             output, cameraExecutor,
-            object : ImageCapture.OnImageCapturedCallback() {
-                override fun onImageCaptured(output: ImageCapture.OutputFileResults) {
-                    val fileToUse = output.savedFiles.firstOrNull()?.outputFile ?: file
+            object : ImageCapture.OnImageSavedCallback() {
+                override fun onImageSaved(output: ImageCapture.OutputFileResults) {
                     val uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        MediaStoreHelper.saveToMediaStore(context, fileToUse, MediaStoreHelper.MediaKind.Photo)
+                        MediaStoreHelper.saveToMediaStore(context, file, MediaStoreHelper.MediaKind.Photo)
                     } else {
-                        Uri.fromFile(fileToUse)
+                        Uri.fromFile(file)
                     }
                     onImage(uri)
                 }
@@ -89,7 +84,7 @@ class CameraManager(private val context: Context) {
         )
     }
 
-    fun startVideo(previewView: PreviewView, onVideoReady: (Uri) -> Unit, onError: (String) -> Unit) {
+    fun startVideo(previewView: androidx.camera.view.PreviewView, onVideoReady: (Uri) -> Unit, onError: (String) -> Unit) {
         val name = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US).format(Date()) + "_record.mp4"
         val contentValues = android.content.ContentValues().apply {
             put(MediaStore.Video.Media.DISPLAY_NAME, name)
@@ -101,7 +96,9 @@ class CameraManager(private val context: Context) {
             onError("Could not create video output")
             return
         }
-        val output = FileOutputOptions.Builder(contentUri).setFileName(name).build()
+        val output = FileOutputOptions.Builder(context.cacheDir)
+            .setFileName(contentUri.lastPathSegment ?: name)
+            .build()
         videoCapture = VideoCapture.withOutput(output)
 
         val surfaceProvider = previewView.surfaceProvider
@@ -110,31 +107,24 @@ class CameraManager(private val context: Context) {
         videoRecording = videoCapture?.prepareRecording(context, output)
             .apply {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                    setQualitySelector(QualitySelector.from(Quality.HD))
+                    setQualitySelector(QualitySelector.from(androidx.camera.video.Quality.HD))
                 }
             }
             .execute(ContextCompat.getMainExecutor(context))
         onVideoReady(contentUri)
     }
 
-    fun stopVideo(onVideoStop: (Uri) -> Unit, onError: (String) -> Unit) {
+    fun stopVideo(previewView: androidx.camera.view.PreviewView, onVideoStop: (Uri?) -> Unit, onError: (String) -> Unit) {
         videoRecording?.stop()
         videoRecording = null
-        onVideoStop(contentUriFromRecording(context, it.output))
+        previewView?.surfaceProvider?.setSurfaceProvider(null)
+        onVideoStop(contentUriFromRecording(videoCapture, previewView))
     }
 
-    private fun contentUriFromRecording(context: Context, output: Recording.Output?): Uri? {
-        return if (output != null) {
-            val path = output.savedFile?.absolutePath
-            if (path != null) {
-                val file = File(path)
-                Uri.fromFile(file)
-            } else {
-                output.savedUri
-            }
-        } else {
-            null
-        }
+    private fun contentUriFromRecording(videoCapture: VideoCapture<VideoRecorded>?, previewView: androidx.camera.view.PreviewView?): Uri? {
+        val result = videoCapture?.output?.await() ?: return previewView?.savedVideo?.video?.uri
+        return result.savedFile?.absolutePath?.let { Uri.fromFile(File(it)) }
+            ?: result.savedVideo?.video?.uri
     }
 
     fun releaseCamera() {

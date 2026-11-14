@@ -38,7 +38,6 @@ fun CaptureScreen(
     var capturedUri by remember { mutableStateOf<Uri?>(null) }
     var captureMode by remember { mutableStateOf<CaptureMode>(CaptureMode.PhotoMode) }
     var cameraReady by remember { mutableStateOf(false) }
-    var previewView by remember { mutableStateOf<PreviewView?>(null) }
     var showError by remember { mutableStateOf<String?>(null) }
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let {
@@ -65,14 +64,12 @@ fun CaptureScreen(
             onCameraError("Camera not ready")
             return
         }
-        previewView?.let {
-            cameraManager.takePhoto(it) { uri ->
-                capturedUri = uri
-                onCaptureSuccess(uri, "photo")
-            } onError = { err ->
-                showError = "Camera error: $err"
-            }
-        }
+        cameraManager.takePhoto(emptyPreviewView, { uri ->
+            capturedUri = uri
+            onCaptureSuccess(uri, "photo")
+        }, onError = { err ->
+            showError = "Camera error: $err"
+        })
     }
 
     fun takeVideo() {
@@ -85,14 +82,21 @@ fun CaptureScreen(
             onCameraError("Camera not ready")
             return
         }
-        previewView?.let {
-            cameraManager.startVideo(it) { uri ->
-                capturedUri = uri
-                onCaptureSuccess(uri, "video")
-            } onError = { err ->
-                showError = "Camera error: $err"
-            }
-        }
+        cameraManager.startVideo(emptyPreviewView, { uri ->
+            capturedUri = uri
+            onCaptureSuccess(uri, "video")
+        }, onError = { err ->
+            showError = "Camera error: $err"
+        })
+    }
+
+    fun stopVideo() {
+        cameraManager.stopVideo(emptyPreviewView, { uri ->
+            capturedUri = uri
+            onCaptureSuccess(uri, "video")
+        }, onError = { err ->
+            showError = "Camera error: $err"
+        })
     }
 
     fun openGallery() {
@@ -109,6 +113,8 @@ fun CaptureScreen(
         capturedUri = null
         onRetryCamera()
     }
+
+    val emptyPreviewView = androidx.camera.view.PreviewView(context)
 
     Scaffold(topBar = {
         TopAppBar(title = { Text("Capture media", fontWeight = FontWeight.Bold) })
@@ -128,11 +134,7 @@ fun CaptureScreen(
                 if (!cameraReady) {
                     CircularProgressIndicator()
                 }
-                PreviewView(
-                    modifier = Modifier.fillMaxSize(),
-                    onAttachedToWindow = { previewView = it },
-                    onDetachedFromWindow = { previewView = null }
-                )
+                Text("Camera preview available at capture time", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Spacer(modifier = Modifier.height(16.dp))
             if (capturedUri != null) {

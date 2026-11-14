@@ -1,6 +1,5 @@
 package com.arin.civicreport.ui.location
 
-import android.util.TypedValue
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -41,15 +40,17 @@ fun MapViewProvider(
                     setInfoWindow(null)
                 })
                 setOnMapListener(object : MapView.OnMapListener {
-                    override fun onMapMove() {
+                    override fun onMove() {
                         onPointChanged(controller.viewportCenter)
                     }
 
-                    override fun onMapZoom() {}
+                    override fun onZoom() {}
                     override fun onMarkerDragStart(marker: Marker?) {}
                     override fun onMarkerDrag(marker: Marker?) {}
                     override fun onMarkerDragEnd(marker: Marker?) {}
-                    override fun onSingleTapConfirmed(geometryPoint: org.osmdroid.util.GeometryPoint?) {}
+                    override fun onSingleTapConfirmed(point: org.osmdroid.util.GeometryPoint?) {
+                        point?.let { onPointChanged(GeoPoint(it.y, it.x)) }
+                    }
                 })
             }
         },

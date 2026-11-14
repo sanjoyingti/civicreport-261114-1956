@@ -5,7 +5,6 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.location.Address
 import android.location.Geocoder
-import android.os.Looper
 import androidx.core.content.ContextCompat
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
@@ -14,7 +13,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.asStateFlow
-import org.osmdroid.util.GeoPoint
 
 data class CurrentLocation(
     val latitude: Double, val longitude: Double,
@@ -22,7 +20,6 @@ data class CurrentLocation(
     val state: String, val pincode: String
 )
 
-/** Simple point passed to the map overlay. Mirrors osmdroid's GeoPoint so the rest of the app stays agnostic. */
 data class GeoPoint(
     val latitude: Double,
     val longitude: Double
@@ -74,12 +71,7 @@ class LocationManager(private val context: Context) {
         }
 
         try {
-            val location = if (hasFine) {
-                fusedClient.lastLocation.await()
-            } else {
-                val coarse = fusedClient.lastLocation.await()
-                if (coarse != null && coarse.provider?.contains("network") == true) coarse else fusedClient.lastLocation.await()
-            }
+            val location = getSingleLocation(fusedClient)
 
             if (location == null) {
                 _state.value = LocationState.Error("No GPS signal. Tap the map to place a pin manually.")
@@ -110,20 +102,11 @@ class LocationManager(private val context: Context) {
     }
 }
 
-private suspend fun FusedLocationProviderClient.lastLocation(): android.location.Location? {
+private suspend fun getSingleLocation(client: FusedLocationProviderClient): android.location.Location? {
     return try {
-        val pendingResult = getLocationAvailability()
-        val location = getLastLocation()
-        location.await()
+        val locTask = client.lastLocation
+        locTask.await()
     } catch (e: Exception) {
         null
     }
 }
-
-private suspend fun <T> java.util.concurrent.CompletableFuture<T>.await(): T? =
-    try { kotlinx.coroutines.suspendCancellableCoroutine { cont ->
-        whenComplete { value, ex ->
-            if (ex != null) { cont.resume(null); return@whenComplete }
-            cont.resume(value);
-        }
-    } } catch (e: Exception) { null }
