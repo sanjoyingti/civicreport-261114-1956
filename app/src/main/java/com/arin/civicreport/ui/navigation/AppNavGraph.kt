@@ -26,10 +26,7 @@ fun AppNavigation(
     navController: NavHostController,
     repo: Repository,
     prefs: Prefs,
-    permissionManager: PermissionManager,
-    onGetContentUri: (android.net.Uri) -> android.net.Uri,
-    onUriSaved: (java.io.File, String) -> Unit,
-    mediaTypeFromUri: (android.net.Uri) -> String
+    permissionManager: PermissionManager
 ) {
     NavHost(navController = navController, startDestination = NavigationRoute.HOME) {
         composable(NavigationRoute.HOME) {
@@ -49,7 +46,7 @@ fun AppNavigation(
         composable(NavigationRoute.INCIDENT_SELECTOR) {
             IncidentSelectorScreen(
                 onContinue = { selected ->
-                    navController.navigate("${NavigationRoute.CAPTURE}$selected.joinToString("-"))
+                    navController.navigate("${NavigationRoute.CAPTURE}${selected.joinToString("-")}")
                 }
             )
         }
@@ -72,7 +69,7 @@ fun AppNavigation(
                     navController.navigate(NavigationRoute.LOCATION_DETAILS)
                 },
                 onCameraError = { message -> },
-                onRetryCamera = { }
+                onRetryCamera = {}
             )
         }
         composable(NavigationRoute.LOCATION_DETAILS) {
@@ -95,13 +92,12 @@ fun AppNavigation(
         composable(NavigationRoute.AUTHORITY) {
             val vm = androidx.lifecycle.viewmodel.compose.viewModel<ReportViewModel>()
             val types = navController.previousBackStackEntry?.savedStateHandle?.getString("types")?.split("-") ?: emptyList()
-            val state = navController.previousBackStackEntry?.savedStateHandle?.getString("state") ?: "Maharashtra"
             AuthorityFinderScreen(
                 incidentTypes = types,
                 latitude = navController.previousBackStackEntry?.savedStateHandle?.get<Double>("lat") ?: 0.0,
                 longitude = navController.previousBackStackEntry?.savedStateHandle?.get<Double>("lon") ?: 0.0,
                 address = navController.previousBackStackEntry?.savedStateHandle?.getString("address") ?: "",
-                state = state,
+                state = "Maharashtra",
                 onContinue = { authorities ->
                     vm.updateAuthorities(authorities)
                     navController.navigate(NavigationRoute.REVIEW_SEND)
@@ -122,7 +118,7 @@ fun AppNavigation(
                 sendMethod = prefs.defaultSendMethod,
                 onBack = { navController.popBackStack(NavigationRoute.AUTHORITY, inclusive = false) },
                 onSaveAndSend = { selectedAuths, method ->
-                    vm.updateAuthorities(selectedAuths)
+                    vm.updateAuthorities(selectedAuths.map { id -> vm.reportSelectedAuthorities().find { a -> a.id == id }!! })
                     val newReport = ReportModel(
                         id = vm.reportId.value,
                         incidentTypes = types,
@@ -134,7 +130,7 @@ fun AppNavigation(
                         address = navController.previousBackStackEntry?.savedStateHandle?.getString("address") ?: "",
                         city = navController.previousBackStackEntry?.savedStateHandle?.getString("city") ?: "",
                         district = navController.previousBackStackEntry?.savedStateHandle?.getString("district") ?: "",
-                        state = navController.previousBackStackEntry?.savedStateHandle?.getString("state") ?: "Maharashtra",
+                        state = "Maharashtra",
                         pincode = navController.previousBackStackEntry?.savedStateHandle?.getString("pincode") ?: "",
                         description = navController.previousBackStackEntry?.savedStateHandle?.getString("description") ?: "",
                         status = IncidentStatus.Sent,
@@ -170,7 +166,7 @@ fun AppNavigation(
                 onRequestPermission = { perm ->
                     permissionManager.requestPermission(perm)
                 },
-                onAddAuthority = { }
+                onAddAuthority = {}
             )
         }
     }

@@ -16,9 +16,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.arin.civicreport.ui.location.CurrentLocation
 import com.arin.civicreport.ui.location.LocationManager
 import com.arin.civicreport.ui.location.MapViewProvider
+import com.arin.civicreport.ui.location.GeoPoint
 import com.arin.civicreport.ui.screens.report.ReportViewModel
 import com.arin.civicreport.ui.util.Prefs
-import org.osmdroid.util.GeoPoint
 import java.text.DecimalFormat
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -43,13 +43,14 @@ fun LocationDetailsScreen(
     var description by remember { mutableStateOf("") }
     var mapPoint by remember { mutableStateOf<GeoPoint?>(null) }
 
+    val locationManager = remember { LocationManager(context) }
+
     LaunchedEffect(Unit) {
         if (prefs.enableLocationServices) {
-            locationManagerState.value?.let { loc ->
-                lat = loc.latitude
-                lon = loc.longitude
-                addr = loc.address
-            }
+            val loc = locationManager.getCurrentLocation()
+            lat = loc.latitude
+            lon = loc.longitude
+            addr = loc.address
         }
     }
 
@@ -59,7 +60,7 @@ fun LocationDetailsScreen(
 
     fun onConfirm() {
         saveToBackStack()
-        onLocationConfirmed(lat, lon, addr.ifBlank { "${lat}, ${lon}" })
+        onLocationConfirmed(lat, lon, addr.ifBlank { "$lat, $lon" })
     }
 
     Scaffold(topBar = {
@@ -128,5 +129,3 @@ fun LocationDetailsScreen(
         }
     }
 }
-
-private val locationManagerState = mutableStateOf<CurrentLocation?>(null)

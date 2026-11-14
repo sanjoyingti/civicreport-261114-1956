@@ -33,14 +33,13 @@ fun HomeScreen(
     onOpenReport: (Long) -> Unit
 ) {
     val reports = repo.getReports().collectAsState(initial = emptyList())
-    var showEditDialog by remember { mutableStateOf<Long?>(null) }
     var showDeleteDialog by remember { mutableStateOf<Long?>(null) }
     val scope = rememberCoroutineScope()
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Civic Incident Reporter", fontWeight = FontWeight.Bold) },
+                title = { Text("DuarBagori Reports", fontWeight = FontWeight.Bold) },
                 actions = {
                     IconButton(onClick = onOpenSettings) {
                         Icon(Icons.Default.Settings, contentDescription = "Settings")
@@ -49,13 +48,12 @@ fun HomeScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(
+            ExtendedFloatingActionButton(
                 onClick = onReportNew,
-                modifier = Modifier.clip(CircleShape),
-                containerColor = MaterialTheme.colorScheme.primaryContainer
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "Report Incident")
-            }
+                icon = { Icon(Icons.Default.Add, contentDescription = null) },
+                text = { Text("Report Incident") },
+                modifier = Modifier.clip(CircleShape)
+            )
         }
     ) { padding ->
         Column(modifier = Modifier
@@ -73,7 +71,6 @@ fun HomeScreen(
                         ReportCard(
                             report = report,
                             onClick = { onOpenReport(report.id) },
-                            onEdit = { showEditDialog = report.id },
                             onDelete = { showDeleteDialog = report.id }
                         )
                     }
@@ -82,14 +79,6 @@ fun HomeScreen(
         }
     }
 
-    showEditDialog?.let { id ->
-        AlertDialog(
-            onDismissRequest = { showEditDialog = null },
-            title = { Text("Edit report") },
-            text = { Text("Edit is coming in the next update.") },
-            confirmButton = { TextButton(onClick = { showEditDialog = null }) { Text("OK") } }
-        )
-    }
     showDeleteDialog?.let { id ->
         AlertDialog(
             onDismissRequest = { showDeleteDialog = null },
@@ -109,7 +98,6 @@ fun HomeScreen(
 private fun ReportCard(
     report: com.arin.civicreport.model.Report,
     onClick: () -> Unit,
-    onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
@@ -120,14 +108,11 @@ private fun ReportCard(
             .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
-        Row(modifier = Modifier
-            .fillMaxWidth()
-            .padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(report.incidentTypes.joinToString(", "), fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                Text("${report.address.ifBlank { "Location unknown" }} • ${formatDate(report.timestamp)}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Box {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(report.incidentTypes.joinToString(", "), fontWeight = FontWeight.Bold, fontSize = 15.sp)
+            Text("${report.address.ifBlank { "Location unknown" }} • ${formatDate(report.timestamp)}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(modifier = Modifier.height(4.dp))
+            Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                 val badgeColor = when (report.status) {
                     IncidentStatus.Sent -> MaterialTheme.colorScheme.primary
                     IncidentStatus.Pending -> Color(0xFFFFA600)

@@ -5,9 +5,10 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.location.Address
 import android.location.Geocoder
-import android.location.Location
 import android.os.Looper
 import androidx.core.content.ContextCompat
+import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationServices
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -21,6 +22,8 @@ data class CurrentLocation(
 )
 
 class LocationManager(private val context: Context) {
+    private val fusedClient: FusedLocationProviderClient =
+        LocationServices.getFusedLocationProviderClient(context)
     private val geocoder = Geocoder(context, java.util.Locale.getDefault())
 
     private val _state = MutableStateFlow<LocationState>(LocationState.Idle)
@@ -43,17 +46,20 @@ class LocationManager(private val context: Context) {
         )
     }
 
+    fun hasFineLocation(): Boolean =
+        ContextCompat.checkSelfPermission(
+            context, Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+
+    fun hasCoarseLocation(): Boolean =
+        ContextCompat.checkSelfPermission(
+            context, Manifest.permission.ACCESS_COARSE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+
     suspend fun getCurrentLocation(): CurrentLocation = withContext(Dispatchers.IO) {
         _state.value = LocationState.Loading("Getting your location...")
-        val ctx = context.applicationContext
-        val hasFine = ContextCompat.checkSelfPermission(
-            ctx,
-            Manifest.permission.ACCESS_FINE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED
-        val hasCoarse = ContextCompat.checkSelfPermission(
-            ctx,
-            Manifest.permission.ACCESS_COARSE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED
+        val hasFine = hasFineLocation()
+        val hasCoarse = hasCoarseLocation()
 
         if (!hasFine && !hasCoarse) {
             _state.value = LocationState.Error("Location permission denied. Tap the map to place a pin manually.")
@@ -61,19 +67,21 @@ class LocationManager(private val context: Context) {
         }
 
         try {
-            val mgr = ctx.getSystemService(Context.LOCATION_SERVICE) as android.location.LocationManager
-            val pos: Location? = if (hasFine) {
-                mgr.getLastKnownLocation(android.location.LocationManager.GPS_PROVIDER)
+            val location = if (hasFine) {
+                fusedClient.lastLocation.await()
             } else {
-                mgr.getLastKnownLocation(android.location.LocationManager.NETWORK_PROVIDER)
+                val coarse = fusedClient.lastLocation.await()
+                if (coarse != null && coarse.provider?.contains("network") == true) coarse else fusedClient.lastLocation.await()
             }
-            if (pos == null) {
+
+            if (location == null) {
                 _state.value = LocationState.Error("No GPS signal. Tap the map to place a pin manually.")
                 return@withContext CurrentLocation(0.0, 0.0, "", "", "", "", "")
             }
+
             _state.value = LocationState.Loading("Finding your address...")
             val addr = try {
-                geocoder.getFromLocation(pos.latitude, pos.longitude, 1)?.firstOrNull()
+                geocoder.getFromLocation(location.latitude, location.longitude, 1)?.firstOrNull()
             } catch (e: Exception) { null }
             val resolvedLoc = setAddress(addr)
             _state.value = LocationState.Ready(resolvedLoc)
@@ -94,3 +102,21 @@ class LocationManager(private val context: Context) {
         resolved
     }
 }
+
+private suspend fun FusedLocationProviderClient.lastLocation(): android.location.Location? {
+    return try {
+        val pendingResult = getLocationAvailability()
+        val location = getLastLocation()
+        location.await()
+    } catch (e: Exception) {
+        null
+    }
+}
+
+private suspend fun <T> java.util.concurrent.CompletableFuture<T>.await(): T? =
+    try { kotlinx.coroutines.suspendCancellableCoroutine { cont ->
+        whenComplete { value, ex ->
+            if (ex != null) { cont.resume(null); return@whenComplete }
+            cont.resume(value);
+        }
+    } } catch (e: Exception) { null }

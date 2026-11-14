@@ -9,27 +9,18 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.core.view.WindowCompat
 import androidx.navigation.compose.rememberNavController
 import com.arin.civicreport.data.CivicDatabase
 import com.arin.civicreport.data.Repository
 import com.arin.civicreport.ui.navigation.AppNavigation
 import com.arin.civicreport.ui.theme.CivicReportTheme
-import com.arin.civicreport.ui.util.PermissionManager
 import com.arin.civicreport.ui.util.Prefs
+import com.arin.civicreport.ui.util.PermissionManager
 
 class MainActivity : ComponentActivity() {
-
-    override fun attachBaseContext(newContext: Context) {
-        super.attachBaseContext(newContext)
-        ApplicationLifecycle.register(newContext.applicationContext)
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -49,21 +40,10 @@ class MainActivity : ComponentActivity() {
                         navController = rememberNavController(),
                         repo = repo,
                         prefs = prefs,
-                        permissionManager = PermissionManager(this),
-                        onGetContentUri = { it },
-                        onUriSaved = { _, _ -> },
-                        mediaTypeFromUri = { uri ->
-                            if (uri.toString().lowercase().endsWith(".mp4") || uri.toString().lowercase().endsWith(".webm")) "video" else "photo"
-                        }
+                        permissionManager = PermissionManager(this)
                     )
                 }
             }
         }
     }
-}
-
-object ApplicationLifecycle {
-    private var context: android.content.Context? = null
-    fun register(appCtx: android.content.Context) { context = appCtx }
-    fun context(): android.content.Context = context ?: throw IllegalStateException("context not set")
 }

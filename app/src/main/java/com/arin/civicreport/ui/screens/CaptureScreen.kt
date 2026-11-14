@@ -18,7 +18,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.arin.civicreport.ui.media.CameraManager
@@ -40,6 +39,7 @@ fun CaptureScreen(
     var captureMode by remember { mutableStateOf<CaptureMode>(CaptureMode.PhotoMode) }
     var cameraReady by remember { mutableStateOf(false) }
     var previewView by remember { mutableStateOf<PreviewView?>(null) }
+    var showError by remember { mutableStateOf<String?>(null) }
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let {
             val type = if (it.toString().lowercase().endsWith(".mp4") || it.toString().lowercase().endsWith(".webm")) "video" else "photo"
@@ -70,7 +70,7 @@ fun CaptureScreen(
                 capturedUri = uri
                 onCaptureSuccess(uri, "photo")
             } onError = { err ->
-                onCameraError("Camera error: $err")
+                showError = "Camera error: $err"
             }
         }
     }
@@ -90,7 +90,7 @@ fun CaptureScreen(
                 capturedUri = uri
                 onCaptureSuccess(uri, "video")
             } onError = { err ->
-                onCameraError("Camera error: $err")
+                showError = "Camera error: $err"
             }
         }
     }
@@ -103,6 +103,11 @@ fun CaptureScreen(
         launcher.launch(
             if (captureMode == CaptureMode.VideoMode) "video/*" else "image/*"
         )
+    }
+
+    fun cancelCapture() {
+        capturedUri = null
+        onRetryCamera()
     }
 
     Scaffold(topBar = {
@@ -138,8 +143,12 @@ fun CaptureScreen(
                 }
                 Spacer(modifier = Modifier.height(12.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    Button(onClick = { captureMode = CaptureMode.PhotoMode; capturedUri = null }) { Text("Retake") }
-                    Button(onClick = { onCaptureSuccess(capturedUri!!, if (captureMode == CaptureMode.VideoMode) "video" else "photo") }) { Text("Confirm") }
+                    Button(onClick = cancelCapture) { Text("Retake") }
+                    Button(onClick = {
+                        capturedUri?.let {
+                            onCaptureSuccess(it, if (captureMode == CaptureMode.VideoMode) "video" else "photo")
+                        }
+                    }) { Text("Confirm") }
                 }
             } else {
                 Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {

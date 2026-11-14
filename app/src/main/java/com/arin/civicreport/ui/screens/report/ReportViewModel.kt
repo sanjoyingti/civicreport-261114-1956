@@ -1,22 +1,27 @@
 package com.arin.civicreport.ui.screens.report
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.arin.civicreport.model.Authority as AuthorityModel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 
 class ReportViewModel : ViewModel() {
-    private var _reportId = 0L
-    var reportId: Long
-        get() = _reportId
-        set(value) { _reportId = value }
+    private val _reportId = MutableStateFlow(0L)
+    val reportId: StateFlow<Long> = _reportId.asStateFlow()
 
-    private var _selectedAuthorities = listOf<AuthorityModel>()
-    var selectedAuthorities: List<AuthorityModel>
-        get() = _selectedAuthorities
-        set(value) { _selectedAuthorities = value }
-
-    fun updateAuthorities(authorities: List<AuthorityModel>) {
-        _selectedAuthorities = authorities
+    fun setReportId(id: Long) {
+        _reportId.value = id
     }
 
-    fun reportSelectedAuthorities(): List<AuthorityModel> = _selectedAuthorities
+    private val _selectedAuthorities = MutableStateFlow<List<AuthorityModel>>(emptyList())
+    val selectedAuthorities: StateFlow<List<AuthorityModel>> = _selectedAuthorities.asStateFlow()
+
+    fun updateAuthorities(authorities: List<AuthorityModel>) {
+        _selectedAuthorities.value = authorities
+    }
+
+    fun reportSelectedAuthorities(): List<AuthorityModel> = _selectedAuthorities.value
 }

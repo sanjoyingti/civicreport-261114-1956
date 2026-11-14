@@ -23,10 +23,9 @@ interface AuthorityDao {
     @Query("DELETE FROM authorities WHERE id = :id")
     suspend fun delete(id: String)
 
-    @Query("SELECT * FROM authorities " +
-           "WHERE (activity_tags = 'all' OR activity_tags LIKE '%' || :tag || '%') " +
-           "AND (:state = '' OR :state IS NULL OR applicable_states LIKE '%' || :state || '%') " +
-           "AND (:city = '' OR :city IS NULL OR applicable_cities LIKE '%' || :city || '%') " +
+    @Query("SELECT * FROM authorities WHERE activity_tags LIKE '%' || :tag || '%' " +
+           "AND (:state = '' OR applicable_states LIKE '%' || :state || '%') " +
+           "AND (:city = '' OR applicable_cities LIKE '%' || :city || '%') " +
            "ORDER BY \"order\" ASC")
     suspend fun findByTag(tag: String, state: String, city: String): List<Authority>
 }

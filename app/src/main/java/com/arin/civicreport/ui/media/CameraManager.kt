@@ -11,8 +11,11 @@ import androidx.camera.core.Preview
 import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
-import androidx.camera.view.PreviewView
-import androidx.camera.video.*
+import androidx.camera.video.FileOutputOptions
+import androidx.camera.video.Quality
+import androidx.camera.video.QualitySelector
+import androidx.camera.video.Recording
+import androidx.camera.video.VideoCapture
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.lifecycle.LifecycleOwner
@@ -29,7 +32,7 @@ class CameraManager(private val context: Context) {
     private var cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
     private var preview: Preview? = null
     private var imageCapture: ImageCapture? = null
-    private var videoCapture: VideoCapture<Recording>? = null
+    private var videoCapture: VideoCapture? = null
     private var videoRecording: Recording? = null
     private val cameraExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private val fileProviderAuthority = "${context.packageName}.fileprovider"
@@ -50,9 +53,12 @@ class CameraManager(private val context: Context) {
 
                 preview = Preview.Builder().setResolutionSelector(selector).build()
                 imageCapture = ImageCapture.Builder().build()
+                videoCapture = VideoCapture.withOutput(
+                    FileOutputOptions.Builder(context.cacheDir).setFileName("civic_report.mp4").build()
+                )
 
                 cameraProvider?.unbindAll()
-                cameraProvider?.bindToLifecycle(lifecycleOwner, cameraSelector, preview!!, imageCapture!!)
+                cameraProvider?.bindToLifecycle(lifecycleOwner, cameraSelector, preview!!, imageCapture!!, videoCapture)
                 onReady()
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -67,8 +73,7 @@ class CameraManager(private val context: Context) {
             output, cameraExecutor,
             object : ImageCapture.OnImageCapturedCallback() {
                 override fun onImageCaptured(output: ImageCapture.OutputFileResults) {
-                    val savedPath = output.savedOutputPaths.firstOrNull()
-                    val fileToUse = savedPath?.let { File(it) } ?: file
+                    val fileToUse = output.savedFiles.firstOrNull()?.outputFile ?: file
                     val uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                         MediaStoreHelper.saveToMediaStore(context, fileToUse, MediaStoreHelper.MediaKind.Photo)
                     } else {
@@ -96,39 +101,26 @@ class CameraManager(private val context: Context) {
             onError("Could not create video output")
             return
         }
-        val output = VideoRecordOutput.Builder(context.contentResolver, contentUri).build()
+        val output = FileOutputOptions.Builder(contentUri).setFileName(name).build()
         videoCapture = VideoCapture.withOutput(output)
-        videoCapture?.enableShutterSound(true)
 
         val surfaceProvider = previewView.surfaceProvider
         preview?.setSurfaceProvider(surfaceProvider)
 
-        videoRecording = videoCapture?.record(ContextCompat.getMainExecutor(context)) { event ->
-            when (event) {
-                is VideoCapture.OnVideoRecordingStart -> {
-                    onVideoReady(contentUri)
-                }
-                is VideoCapture.OnVideoRecordingError -> {
-                    onError("Video recording failed: ${event.error.name}")
-                    videoRecording = null
-                }
-                is VideoCapture.OnVideoRecordingProgress -> {
-                    // nothing
+        videoRecording = videoCapture?.prepareRecording(context, output)
+            .apply {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    setQualitySelector(QualitySelector.from(Quality.HD))
                 }
             }
-        } ?: run {
-            onError("Could not start video recording")
-        }
+            .execute(ContextCompat.getMainExecutor(context))
+        onVideoReady(contentUri)
     }
 
     fun stopVideo(onVideoStop: (Uri) -> Unit, onError: (String) -> Unit) {
-        videoRecording?.let {
-            it.stop()
-            videoRecording = null
-            onVideoStop(contentUriFromRecording(context, it.output))
-        } ?: run {
-            onError("No video in progress")
-        }
+        videoRecording?.stop()
+        videoRecording = null
+        onVideoStop(contentUriFromRecording(context, it.output))
     }
 
     private fun contentUriFromRecording(context: Context, output: Recording.Output?): Uri? {
@@ -149,9 +141,7 @@ class CameraManager(private val context: Context) {
         preview?.let {
             it.setSurfaceProvider(null)
         }
-        videoRecording?.let {
-            it.stop()
-        }
+        videoRecording?.stop()
         videoCapture = null
         videoRecording = null
         cameraProvider?.unbindAll()

@@ -1,5 +1,7 @@
 package com.arin.civicreport.ui.screens
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -12,7 +14,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -44,11 +45,74 @@ fun ReportViewScreen(
     var sending by remember { mutableStateOf(false) }
     var showResendConfirm by remember { mutableStateOf(false) }
 
-    val authoritiesById by remember { mutableStateOf<MutableMap<String, AuthorityModel>>(mutableMapOf()) }
+    var authoritiesById by remember { mutableStateOf<MutableMap<String, AuthorityModel>>(mutableMapOf()) }
+
+    LaunchedEffect(report.sentAuthorities) {
+        val map = mutableMapOf<String, AuthorityModel>()
+        repo.getAuthoritiesForIncident(report.incidentTypes.firstOrNull() ?: "pothole", report.state, report.city)
+            .forEach { map[it.id] = it }
+        authoritiesById = map
+    }
 
     fun formatAuthorities(): String {
         return report.sentAuthorities.joinToString(", ") { id ->
             authoritiesById[id]?.name ?: id
+        }
+    }
+
+    fun sendToAuthority(ctx: Context, a: AuthorityModel, method: String, body: String, mediaUri: String?) {
+        val subject = "Civic Incident Report: ${report.incidentTypes.firstOrNull() ?: "Incident"} at ${report.address}"
+        if (method in listOf("email", "both") && a.email.isNotBlank()) {
+            val mail = Intent(Intent.ACTION_SENDTO).apply {
+                data = Uri.parse("mailto:${a.email}")
+                putExtra(Intent.EXTRA_SUBJECT, subject)
+                putExtra(Intent.EXTRA_TEXT, body)
+                mediaUri?.let {
+                    putExtra(Intent.EXTRA_STREAM, Uri.parse(it))
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+            }
+            try { ctx.startActivity(mail) } catch (e: Exception) {
+                android.app.AlertDialog.Builder(ctx)
+                    .setTitle("No email app")
+                    .setMessage("Install an email app to send by email.")
+                    .setPositiveButton("OK") { _, _ -> }
+                    .show()
+            }
+        }
+        if (method in listOf("sms", "both") && a.phone.isNotBlank()) {
+            val sms = Intent(Intent.ACTION_SENDTO).apply {
+                data = Uri.parse("smsto:${a.phone}")
+                putExtra(Intent.EXTRA_TEXT, body)
+            }
+            try { ctx.startActivity(sms) } catch (e: Exception) {
+                android.app.AlertDialog.Builder(ctx)
+                    .setTitle("No SMS app")
+                    .setMessage("Install an SMS app to send by SMS.")
+                    .setPositiveButton("OK") { _, _ -> }
+                    .show()
+            }
+        }
+    }
+
+    fun resendReport(report: com.arin.civicreport.model.Report) {
+        val method = report.sendMethod
+        authoritiesById.values.forEach { a ->
+            if (report.sentAuthorities.contains(a.id)) {
+                sendToAuthority(context, a, method, buildReportBody(report), report.mediaUris.firstOrNull())
+            }
+        }
+    }
+
+    fun buildReportBody(report: com.arin.civicreport.model.Report): String {
+        return buildString {
+            append("Civic Incident Report\n\n")
+            append("Types: ${report.incidentTypes.joinToString(", ")}\n")
+            append("Location: ${report.address.ifBlank { "unknown" }}\n")
+            append("Latitude: ${"%.6f".format(report.latitude)}\n")
+            append("Longitude: ${"%.6f".format(report.longitude)}\n")
+            append("Media: ${report.mediaUris.joinToString(", ")} ($report.mediaType)\n")
+            append("Description: ${report.description.ifBlank { "No description provided" }}\n")
         }
     }
 
@@ -112,7 +176,7 @@ fun ReportViewScreen(
             Text("History", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             LazyColumn {
                 items(report.sentAuthorities) { it ->
-                    Text("Notified: ${it} - ${formatDate(report.lastUpdated)}", style = MaterialTheme.typography.bodyMedium)
+                    Text("Notified: ${authoritiesById[it]?.name ?: it} - ${formatDate(report.lastUpdated)}", style = MaterialTheme.typography.bodyMedium)
                 }
             }
         }
