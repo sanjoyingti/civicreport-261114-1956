@@ -43,6 +43,7 @@ fun ReviewAndSendScreen(
     var sending by remember { mutableStateOf(false) }
     var networkOK by remember { mutableStateOf(false) }
     var showOfflineDialog by remember { mutableStateOf(false) }
+    var showSendingComplete by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         networkOK = NetworkChecker.isOnline(context)
@@ -61,8 +62,8 @@ fun ReviewAndSendScreen(
 
     fun sendToAuthority(ctx: Context, a: com.arin.civicreport.model.Authority, method: String, body: String, mediaUri: String?) {
         val subject = "Civic Incident Report: ${incidentTypes.firstOrNull() ?: "Incident"} at $address"
-        val mail = if (method in listOf("email", "both") && a.email.isNotBlank()) {
-            Intent(Intent.ACTION_SENDTO).apply {
+        if (method in listOf("email", "both") && a.email.isNotBlank()) {
+            val mail = Intent(Intent.ACTION_SENDTO).apply {
                 data = android.net.Uri.parse("mailto:${a.email}")
                 putExtra(Intent.EXTRA_SUBJECT, subject)
                 putExtra(Intent.EXTRA_TEXT, body)
@@ -71,16 +72,7 @@ fun ReviewAndSendScreen(
                     addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 }
             }
-        } else null
-        val sms = if (method in listOf("sms", "both") && a.phone.isNotBlank()) {
-            Intent(Intent.ACTION_SENDTO).apply {
-                data = android.net.Uri.parse("smsto:${a.phone}")
-                putExtra(Intent.EXTRA_TEXT, body)
-            }
-        } else null
-
-        mail?.let {
-            try { ctx.startActivity(it) } catch (e: Exception) {
+            try { ctx.startActivity(mail) } catch (e: Exception) {
                 android.app.AlertDialog.Builder(ctx)
                     .setTitle("No email app")
                     .setMessage("Install an email app to send by email.")
@@ -88,8 +80,12 @@ fun ReviewAndSendScreen(
                     .show()
             }
         }
-        sms?.let {
-            try { ctx.startActivity(it) } catch (e: Exception) {
+        if (method in listOf("sms", "both") && a.phone.isNotBlank()) {
+            val sms = Intent(Intent.ACTION_SENDTO).apply {
+                data = android.net.Uri.parse("smsto:${a.phone}")
+                putExtra(Intent.EXTRA_TEXT, body)
+            }
+            try { ctx.startActivity(sms) } catch (e: Exception) {
                 android.app.AlertDialog.Builder(ctx)
                     .setTitle("No SMS app")
                     .setMessage("Install an SMS app to send by SMS.")
@@ -134,7 +130,7 @@ fun ReviewAndSendScreen(
             Spacer(modifier = Modifier.height(16.dp))
             if (!networkOK) {
                 OutlinedTextField(
-                    value = "You are offline. The report will be saved as a draft and sent when you are online.",
+                    value = "You are offline. The report will be saved as a draft and the compose screens will open so you can send manually when you are online.",
                     onValueChange = {},
                     modifier = Modifier.fillMaxWidth(),
                     colors = TextFieldDefaults.outlinedTextFieldColors(
@@ -147,21 +143,13 @@ fun ReviewAndSendScreen(
             }
             Button(
                 onClick = {
-                    if (!networkOK) {
-                        showOfflineDialog = true
-                    } else {
-                        sending = true
-                        authorities.filter { selected.contains(it.id) }.forEach { a ->
-                            sendToAuthority(context, a, method, buildBody(), mediaUri)
-                        }
-                        onSaveAndSend(selected.sorted(), method)
-                        sending = false
-                        android.app.AlertDialog.Builder(context)
-                            .setTitle("Sent")
-                            .setMessage("Report sent to ${selected.size} authority(ies).")
-                            .setPositiveButton("OK") { _, _ -> }
-                            .show()
+                    sending = true
+                    authorities.filter { selected.contains(it.id) }.forEach { a ->
+                        sendToAuthority(context, a, method, buildBody(), mediaUri)
                     }
+                    onSaveAndSend(selected.sorted(), method)
+                    sending = false
+                    showSendingComplete = true
                 },
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !sending && selected.isNotEmpty()
@@ -171,29 +159,13 @@ fun ReviewAndSendScreen(
         }
     }
 
-    if (showOfflineDialog) {
+    if (showSendingComplete) {
         AlertDialog(
-            onDismissRequest = { showOfflineDialog = false },
-            title = { Text("No internet connection") },
-            text = { Text("Reports are saved locally. Do you want to save this as a draft and send it later when you are online?") },
+            onDismissRequest = { showSendingComplete = false },
+            title = { Text("Reports opened") },
+            text = { Text("Compose screens have opened for each authority. Press the system Back button to return here when done.") },
             confirmButton = {
-                TextButton(onClick = {
-                    showOfflineDialog = false
-                    sending = true
-                    authorities.filter { selected.contains(it.id) }.forEach { a ->
-                        sendToAuthority(context, a, method, buildBody(), mediaUri)
-                    }
-                    onSaveAndSend(selected.sorted(), method)
-                    sending = false
-                    android.app.AlertDialog.Builder(context)
-                        .setTitle("Draft saved")
-                        .setMessage("Report saved as draft. It will be sent when you are online.")
-                        .setPositiveButton("OK") { _, _ -> }
-                        .show()
-                }) { Text("Save as draft") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showOfflineDialog = false }) { Text("Cancel") }
+                TextButton(onClick = { showSendingComplete = false }) { Text("OK") }
             }
         )
     }

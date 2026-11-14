@@ -36,7 +36,6 @@ fun HomeScreen(
     var showEditDialog by remember { mutableStateOf<Long?>(null) }
     var showDeleteDialog by remember { mutableStateOf<Long?>(null) }
     val scope = rememberCoroutineScope()
-    val context = LocalContext.current
 
     Scaffold(
         topBar = {

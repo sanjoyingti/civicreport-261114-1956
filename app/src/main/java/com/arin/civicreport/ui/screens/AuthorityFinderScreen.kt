@@ -1,6 +1,5 @@
 package com.arin.civicreport.ui.screens
 
-import android.content.Context
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -16,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.arin.civicreport.data.CivicDatabase
 import com.arin.civicreport.data.Repository
 import com.arin.civicreport.model.Authority as AuthorityModel
 
@@ -30,7 +30,7 @@ fun AuthorityFinderScreen(
     onContinue: (List<AuthorityModel>) -> Unit
 ) {
     val context = LocalContext.current
-    var selected by remember { mutableStateOf<List<AuthorityModel>>(emptyList()) }
+    var selected by remember { mutableStateOf<MutableSet<String>>(mutableSetOf()) }
     var loading by remember { mutableStateOf(true) }
     var authorities by remember { mutableStateOf<List<AuthorityModel>>(emptyList()) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -38,10 +38,13 @@ fun AuthorityFinderScreen(
     LaunchedEffect(incidentTypes, state) {
         try {
             loading = true
-            val repo = Repository(com.arin.civicreport.data.CivicDatabase.getInstance(context))
+            val repo = Repository(CivicDatabase.getInstance(context))
             repo.seedAuthorities()
-            val tag = incidentTypes.firstOrNull() ?: "pothole"
-            authorities = repo.getAuthoritiesForIncident(tag, state, "")
+            val matching = mutableSetOf<AuthorityModel>()
+            for (tag in incidentTypes) {
+                matching.addAll(repo.getAuthoritiesForIncident(tag, state, ""))
+            }
+            authorities = matching.sortedBy { it.order }
         } catch (e: Exception) {
             error = "Could not load authorities: ${e.message}"
         } finally {
@@ -72,7 +75,7 @@ fun AuthorityFinderScreen(
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { selected = if (isSelected) selected - a.id else selected + a.id }
+                                .clickable { selected = if (isSelected) { selected - a.id } else { selected + a.id } }
                                 .border(2.dp, if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent, RoundedCornerShape(12.dp)),
                             colors = CardDefaults.cardColors(containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface)
                         ) {
@@ -100,7 +103,7 @@ fun AuthorityFinderScreen(
                     if (selected.isEmpty()) {
                         AlertDialog(onDismissRequest = { }, title = { Text("Select authorities") }, text = { Text("Choose at least one authority to notify.") }, confirmButton = { TextButton(onClick = { }) { Text("OK") } })
                     } else {
-                        onContinue(selected)
+                        onContinue(selected.toList())
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),

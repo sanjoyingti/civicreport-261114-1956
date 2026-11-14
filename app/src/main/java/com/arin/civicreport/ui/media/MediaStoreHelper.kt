@@ -4,13 +4,12 @@ import android.content.ContentValues
 import android.content.Context
 import android.net.Uri
 import android.os.Build
-import android.os.Environment
 import android.provider.MediaStore
 
 object MediaStoreHelper {
     enum class MediaKind { Photo, Video }
 
-    fun saveToMediaStore(context: Context, file: File, kind: MediaKind): Uri {
+    fun saveToMediaStore(context: Context, file: java.io.File, kind: MediaKind): Uri {
         val contentValues = ContentValues().apply {
             put(
                 when (kind) {
@@ -45,13 +44,5 @@ object MediaStoreHelper {
             MediaKind.Video -> MediaStore.Video.Media.EXTERNAL_CONTENT_URI
         }
         return context.contentResolver.insert(collection, contentValues)!!
-    }
-
-    fun getContentUriForVideo(name: String): Uri {
-        return MediaStore.Video.Media.getContentUri(
-            MediaStore.VOLUME_EXTERNAL_PRIMARY.name,
-            null,
-            null
-        )
     }
 }

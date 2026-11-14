@@ -16,7 +16,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.arin.civicreport.ui.location.CurrentLocation
 import com.arin.civicreport.ui.location.LocationManager
 import com.arin.civicreport.ui.location.MapViewProvider
-import com.arin.civicreport.ui.location.MapViewProviderState
 import com.arin.civicreport.ui.screens.report.ReportViewModel
 import com.arin.civicreport.ui.util.Prefs
 import org.osmdroid.util.GeoPoint
@@ -37,26 +36,20 @@ fun LocationDetailsScreen(
     val context = LocalContext.current
     val prefs = remember { Prefs(context) }
     val reportViewModel: ReportViewModel = viewModel()
-    val locationManager = remember { LocationManager(context) }
 
     var lat by remember { mutableStateOf(latitude) }
     var lon by remember { mutableStateOf(longitude) }
     var addr by remember { mutableStateOf(address) }
     var description by remember { mutableStateOf("") }
-    var currentState by remember { mutableStateOf<LocationManager.LocationState?>(null) }
     var mapPoint by remember { mutableStateOf<GeoPoint?>(null) }
-    var pointState by remember { mutableStateOf<MapViewProviderState?>(null) }
 
     LaunchedEffect(Unit) {
         if (prefs.enableLocationServices) {
-            locationManager.getCurrentLocation().let { loc ->
+            locationManagerState.value?.let { loc ->
                 lat = loc.latitude
                 lon = loc.longitude
                 addr = loc.address
             }
-        }
-        locationManager.state.collect { state ->
-            currentState = state
         }
     }
 
@@ -66,17 +59,11 @@ fun LocationDetailsScreen(
 
     fun onConfirm() {
         saveToBackStack()
-        onLocationConfirmed(lat, lon, addr)
-    }
-
-    fun updateMapFromLocation(loc: CurrentLocation) {
-        lat = loc.latitude
-        lon = loc.longitude
-        addr = loc.address
+        onLocationConfirmed(lat, lon, addr.ifBlank { "${lat}, ${lon}" })
     }
 
     Scaffold(topBar = {
-        TopAppBar(title = { Text("Location &amp; Details", fontWeight = FontWeight.Bold) })
+        TopAppBar(title = { Text("Location & Details", fontWeight = FontWeight.Bold) })
     }, floatingActionButton = {
         FloatingActionButton(
             onClick = { onConfirm() },
@@ -96,17 +83,14 @@ fun LocationDetailsScreen(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 Box(contentAlignment = Alignment.Center) {
-                    pointState = MapViewProvider(
-                        initialPoint = if (mapPoint != null) mapPoint!! else GeoPoint(latitude, longitude),
+                    MapViewProvider(
+                        initialPoint = mapPoint ?: GeoPoint(latitude, longitude),
                         initialAddress = addr
                     ) { point ->
                         mapPoint = point
                         lat = point.latitude
                         lon = point.longitude
                         addr = "${point.latitude}, ${point.longitude}"
-                    }
-                    if (pointState == null) {
-                        CircularProgressIndicator()
                     }
                 }
             }
@@ -134,17 +118,15 @@ fun LocationDetailsScreen(
                 minLines = 3
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            if (currentState is LocationManager.LocationState.Loading) {
-                Text("Getting your location...", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            } else if (currentState is LocationManager.LocationState.Error) {
-                Text(
-                    "Location could not be auto-detected. Tap on the map to place a pin manually.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error
-                )
-            }
+            Text(
+                "Tap Confirm to save this location. You can move the map pin to refine it.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
+
+private val locationManagerState = mutableStateOf<CurrentLocation?>(null)

@@ -1,11 +1,6 @@
 package com.arin.civicreport.ui.location
 
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.LocalView
 import androidx.lifecycle.Lifecycle
@@ -41,15 +36,13 @@ fun MapViewProvider(
             setTileSource(org.osmdroid.tileprovider.tilesource.TileSourceFactory.MAPNIK)
             setMultiTouchControls(true)
             controller.setZoom(15.0)
-            controller.setCenter(selectedPoint ?: GeoPoint(19.0760, 72.8777))
+            val center = selectedPoint ?: GeoPoint(19.0760, 72.8777)
+            controller.setCenter(center)
             overlayManager.add(Marker(this).apply {
-                position = selectedPoint ?: GeoPoint(19.0760, 72.8777)
+                position = center
                 title = "Pin"
                 setInfoWindow(null)
             })
-            setOnMapClickListener { _, _ ->
-                // Map click handled per-MapView instance in LocationDetailsScreen
-            }
         }
         mapView = m
         state = MapViewProviderState(m)

@@ -16,11 +16,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.arin.civicreport.data.Authority
-import com.arin.civicreport.data.CivicDatabase
 import com.arin.civicreport.data.Repository
+import com.arin.civicreport.model.Authority as AuthorityModel
 import com.arin.civicreport.model.IncidentStatus
-import com.arin.civicreport.ui.util.NetworkChecker
 import com.arin.civicreport.ui.util.Prefs
 import com.arin.civicreport.ui.util.PermissionManager
 import kotlinx.coroutines.launch
@@ -44,6 +42,15 @@ fun ReportViewScreen(
     val context = LocalContext.current
     var showMenu by remember { mutableStateOf(false) }
     var sending by remember { mutableStateOf(false) }
+    var showResendConfirm by remember { mutableStateOf(false) }
+
+    val authoritiesById by remember { mutableStateOf<MutableMap<String, AuthorityModel>>(mutableMapOf()) }
+
+    fun formatAuthorities(): String {
+        return report.sentAuthorities.joinToString(", ") { id ->
+            authoritiesById[id]?.name ?: id
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -54,7 +61,7 @@ fun ReportViewScreen(
         },
         floatingActionButton = {
             FloatingActionButton(
-                onClick = { sending = true; scope.launch { resendReport(report) }; sending = false },
+                onClick = { showResendConfirm = true },
                 modifier = Modifier.clip(CircleShape),
                 containerColor = MaterialTheme.colorScheme.primaryContainer
             ) {
@@ -77,7 +84,7 @@ fun ReportViewScreen(
                     Text("Description: ${report.description.ifBlank { "No description provided" }}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text("Latitude: ${"%.6f".format(report.latitude)}  Longitude: ${"%.6f".format(report.longitude)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text("Media: ${report.mediaUris.joinToString(", ")}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text("Sent to: ${report.sentAuthorities.joinToString(", ")}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Sent to: ${formatAuthorities()}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text("Send method: ${report.sendMethod}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
@@ -105,7 +112,7 @@ fun ReportViewScreen(
             Text("History", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             LazyColumn {
                 items(report.sentAuthorities) { it ->
-                    Text("Notified: $it - ${formatDate(report.lastUpdated)}", style = MaterialTheme.typography.bodyMedium)
+                    Text("Notified: ${it} - ${formatDate(report.lastUpdated)}", style = MaterialTheme.typography.bodyMedium)
                 }
             }
         }
@@ -119,17 +126,26 @@ fun ReportViewScreen(
         }
     }
 
-    LaunchedEffect(Unit) {
-        repo.updateStatus(report.id, IncidentStatus.Sent)
-    }
-
-    suspend fun resendReport(report: com.arin.civicreport.model.Report) {
-        // Resend logic placeholder - actual implementation would build intents per authority
-        android.app.AlertDialog.Builder(context)
-            .setTitle("Resend")
-            .setMessage("Report ${report.id} sent again.")
-            .setPositiveButton("OK") { _, _ -> }
-            .show()
+    if (showResendConfirm) {
+        AlertDialog(
+            onDismissRequest = { showResendConfirm = false },
+            title = { Text("Resend report?") },
+            text = { Text("This will open email/SMS to notify the same authorities again.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showResendConfirm = false
+                    sending = true
+                    resendReport(report)
+                    sending = false
+                    android.app.AlertDialog.Builder(context)
+                        .setTitle("Resent")
+                        .setMessage("Report ${report.id} sent again.")
+                        .setPositiveButton("OK") { _, _ -> }
+                        .show()
+                }) { Text("Resend") }
+            },
+            dismissButton = { TextButton(onClick = { showResendConfirm = false }) { Text("Cancel") } }
+        )
     }
 }
 

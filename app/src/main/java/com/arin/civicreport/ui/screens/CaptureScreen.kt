@@ -36,18 +36,18 @@ fun CaptureScreen(
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    val view = LocalView.current
     var capturedUri by remember { mutableStateOf<Uri?>(null) }
-    var captureMode by remember { mutableStateOf<CaptureMode>(None) }
-    val cameraManager = remember { CameraManager(context) }
-    var previewView by remember { mutableStateOf<PreviewView?>(null) }
+    var captureMode by remember { mutableStateOf<CaptureMode>(CaptureMode.PhotoMode) }
     var cameraReady by remember { mutableStateOf(false) }
+    var previewView by remember { mutableStateOf<PreviewView?>(null) }
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let {
             val type = if (it.toString().lowercase().endsWith(".mp4") || it.toString().lowercase().endsWith(".webm")) "video" else "photo"
             onChooseGallery(it, type)
         }
     }
+
+    val cameraManager = remember { CameraManager(context) }
 
     LaunchedEffect(Unit) {
         cameraManager.initializeCamera(lifecycleOwner) {
@@ -97,12 +97,11 @@ fun CaptureScreen(
 
     fun openGallery() {
         if (!permissionManager.hasReadMedia(context) && !permissionManager.hasReadMediaForLegacy(context)) {
-            permissionManager.requestLocationPermissions()
             onCameraError("Gallery permission denied")
             return
         }
         launcher.launch(
-            if (captureMode == VideoMode) "video/*" else "image/*"
+            if (captureMode == CaptureMode.VideoMode) "video/*" else "image/*"
         )
     }
 
@@ -139,8 +138,8 @@ fun CaptureScreen(
                 }
                 Spacer(modifier = Modifier.height(12.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    Button(onClick = { captureMode = None; capturedUri = null }) { Text("Retake") }
-                    Button(onClick = { onCaptureSuccess(capturedUri!!, if (captureMode == VideoMode) "video" else "photo") }) { Text("Confirm") }
+                    Button(onClick = { captureMode = CaptureMode.PhotoMode; capturedUri = null }) { Text("Retake") }
+                    Button(onClick = { onCaptureSuccess(capturedUri!!, if (captureMode == CaptureMode.VideoMode) "video" else "photo") }) { Text("Confirm") }
                 }
             } else {
                 Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -150,7 +149,7 @@ fun CaptureScreen(
                     Button(
                         onClick = {
                             if (permissionManager.hasCamera(context) && cameraReady) {
-                                if (captureMode == VideoMode) takeVideo() else takePhoto()
+                                if (captureMode == CaptureMode.VideoMode) takeVideo() else takePhoto()
                             } else permissionManager.requestCameraPermission()
                         },
                         modifier = Modifier.fillMaxWidth()

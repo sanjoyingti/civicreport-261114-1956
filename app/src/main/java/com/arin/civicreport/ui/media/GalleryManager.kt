@@ -39,25 +39,31 @@ object GalleryManager {
     }
 
     fun extractExifGPS(context: Context, uri: Uri): Pair<Double, Double>? {
-        var is: InputStream? = null
+        var inputStream: InputStream? = null
         try {
-            is = context.contentResolver.openInputStream(uri)
-            val exif = android.media.ExifInterface(is)
-            val lat = exif.getAttributeDouble(android.media.ExifInterface.TAG_GPS_LATITUDE, null)
-            val lon = exif.getAttributeDouble(android.media.ExifInterface.TAG_GPS_LONGITUDE, null)
-            if (lat != null && lon != null) {
-                val latRef = exif.getAttribute(android.media.ExifInterface.TAG_GPS_LATITUDE_REF)
-                val lonRef = exif.getAttribute(android.media.ExifInterface.TAG_GPS_LONGITUDE_REF)
-                val latD = toDegrees(lat, latRef)
-                val lonD = toDegrees(lon, lonRef)
+            inputStream = context.contentResolver.openInputStream(uri) ?: return null
+            val exif = android.media.ExifInterface(inputStream)
+            val latRaw = exif.getAttribute(android.media.ExifInterface.TAG_GPS_LATITUDE)
+            val lonRaw = exif.getAttribute(android.media.ExifInterface.TAG_GPS_LONGITUDE)
+            val latRef = exif.getAttribute(android.media.ExifInterface.TAG_GPS_LATITUDE_REF)
+            val lonRef = exif.getAttribute(android.media.ExifInterface.TAG_GPS_LONGITUDE_REF)
+            if (latRaw != null && lonRaw != null && latRef != null && lonRef != null) {
+                val latD = toDegrees(parseDegrees(latRaw), latRef)
+                val lonD = toDegrees(parseDegrees(lonRaw), lonRef)
                 return Pair(latD, lonD)
             }
         } catch (e: Exception) {
             Log.e("CivicReport", "Exif read error", e)
         } finally {
-            is?.close()
+            inputStream?.close()
         }
         return null
+    }
+
+    private fun parseDegrees(raw: String): Double {
+        val parts = raw.split(",").map { it.trim().toFloat() }
+        if (parts.size < 3) return raw.toDoubleOrNull() ?: 0.0
+        return parts[0] + parts[1] / 60.0f + parts[2] / 3600.0f
     }
 
     private fun toDegrees(value: Double, ref: String?): Double {
@@ -69,8 +75,8 @@ object GalleryManager {
 
     fun bitmapFromUri(context: Context, uri: Uri): android.graphics.Bitmap? {
         return try {
-            val is = context.contentResolver.openInputStream(uri)
-            android.graphics.BitmapFactory.decodeStream(is)
+            val `is` = context.contentResolver.openInputStream(uri)
+            android.graphics.BitmapFactory.decodeStream(`is`)
         } catch (e: Exception) {
             null
         }
@@ -78,28 +84,31 @@ object GalleryManager {
 
     fun thumbnailFromUri(context: Context, uri: Uri, w: Int = 200, h: Int = 200): android.graphics.Bitmap? {
         return try {
-            val is = context.contentResolver.openInputStream(uri)
-            val opts = android.graphics.BitmapFactory.Options().apply { inSampleSize = computeSampleSize(is, w, h) }
-            android.graphics.BitmapFactory.decodeStream(is, null, opts)
+            val `is` = context.contentResolver.openInputStream(uri)
+            val opts = android.graphics.BitmapFactory.Options().apply { inSampleSize = computeSampleSize(`is`, w, h) }
+            android.graphics.BitmapFactory.decodeStream(`is`, null, opts)
         } catch (e: Exception) {
             null
         }
     }
 
-    private fun computeSampleSize(is: InputStream?, w: Int, h: Int): Int {
+    private fun computeSampleSize(`is`: InputStream?, w: Int, h: Int): Int {
+        var stream = `is`
         val buf = ByteArray(8192)
         var size = 1
         var bytesRead: Int
         var imgW = 0
         var imgH = 0
         try {
-            is?.mark(0)
+            stream?.mark(0)
             val d = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            android.graphics.BitmapFactory.decodeStream(is, null, d)
-            is?.reset()
+            android.graphics.BitmapFactory.decodeStream(stream, null, d)
+            stream?.reset()
             imgW = d.outWidth
             imgH = d.outHeight
-        } catch (e: Exception) { return 1 }
+        } catch (e: Exception) {
+            return 1
+        }
         while (imgW / size >= w && imgH / size >= h && size < 16) size *= 2
         return size
     }
