@@ -22,6 +22,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.arin.civicreport.model.IncidentStatus
+import com.arin.civicreport.ui.util.NetworkChecker
 import com.arin.civicreport.ui.util.PermissionManager
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -42,6 +43,12 @@ fun ReviewAndSendScreen(
     var selected by remember { mutableStateOf(authorities.map { it.id }) }
     var method by remember { mutableStateOf(sendMethod) }
     var sending by remember { mutableStateOf(false) }
+    var networkOK by remember { mutableStateOf(false) }
+    var showOfflineDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        networkOK = NetworkChecker.isOnline(context)
+    }
 
     fun buildBody(): String {
         return buildString {
@@ -54,9 +61,49 @@ fun ReviewAndSendScreen(
         }
     }
 
+    fun sendToAuthority(ctx: Context, a: com.arin.civicreport.model.Authority, method: String, body: String, mediaUri: String?) {
+        val subject = "Civic Incident Report: ${incidentTypes.firstOrNull() ?: "Incident"} at $address"
+        val mail = if (method in listOf("email", "both") && a.email.isNotBlank()) {
+            Intent(Intent.ACTION_SENDTO).apply {
+                data = android.net.Uri.parse("mailto:${a.email}")
+                putExtra(Intent.EXTRA_SUBJECT, subject)
+                putExtra(Intent.EXTRA_TEXT, body)
+                mediaUri?.let {
+                    putExtra(Intent.EXTRA_STREAM, Uri.parse(it))
+                    addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+            }
+        } else null
+        val sms = if (method in listOf("sms", "both") && a.phone.isNotBlank()) {
+            Intent(Intent.ACTION_SENDTO).apply {
+                data = android.net.Uri.parse("smsto:${a.phone}")
+                putExtra(Intent.EXTRA_TEXT, body)
+            }
+        } else null
+
+        mail?.let {
+            try { ctx.startActivity(it) } catch (e: Exception) {
+                android.app.AlertDialog.Builder(ctx)
+                    .setTitle("No email app")
+                    .setMessage("Install an email app to send by email.")
+                    .setPositiveButton("OK") { _, _ -> }
+                    .show()
+            }
+        }
+        sms?.let {
+            try { ctx.startActivity(it) } catch (e: Exception) {
+                android.app.AlertDialog.Builder(ctx)
+                    .setTitle("No SMS app")
+                    .setMessage("Install an SMS app to send by SMS.")
+                    .setPositiveButton("OK") { _, _ -> }
+                    .show()
+            }
+        }
+    }
+
     Scaffold(topBar = {
         TopAppBar(
-            title = { Text("Review & Send", fontWeight = FontWeight.Bold) },
+            title = { Text("Review &amp; Send", fontWeight = FontWeight.Bold) },
             navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, contentDescription = "Back") } }
         )
     }) { padding ->
@@ -87,10 +134,25 @@ fun ReviewAndSendScreen(
                 SendMethodChip(method == "both", "Both") { method = "both" }
             }
             Spacer(modifier = Modifier.height(16.dp))
+            if (!networkOK) {
+                OutlinedTextField(
+                    value = "You are offline. The report will be saved as a draft and sent when you are online.",
+                    onValueChange = {},
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = TextFieldDefaults.outlinedTextFieldColors(
+                        backgroundColor = MaterialTheme.colorScheme.errorContainer,
+                        focusedBorderColor = MaterialTheme.colorScheme.error,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.error
+                    ),
+                    readOnly = true
+                )
+            }
             Button(
                 onClick = {
-                    sending = true
-                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    if (!networkOK) {
+                        showOfflineDialog = true
+                    } else {
+                        sending = true
                         authorities.filter { selected.contains(it.id) }.forEach { a ->
                             sendToAuthority(context, a, method, buildBody(), mediaUri)
                         }
@@ -109,6 +171,33 @@ fun ReviewAndSendScreen(
                 Text(if (sending) "Sending…" else "Send All")
             }
         }
+    }
+
+    if (showOfflineDialog) {
+        AlertDialog(
+            onDismissRequest = { showOfflineDialog = false },
+            title = { Text("No internet connection") },
+            text = { Text("Reports are saved locally. Do you want to save this as a draft and send it later when you are online?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showOfflineDialog = false
+                    sending = true
+                    authorities.filter { selected.contains(it.id) }.forEach { a ->
+                        sendToAuthority(context, a, method, buildBody(), mediaUri)
+                    }
+                    onSaveAndSend(selected.sorted(), method)
+                    sending = false
+                    android.app.AlertDialog.Builder(context)
+                        .setTitle("Draft saved")
+                        .setMessage("Report saved as draft. It will be sent when you are online.")
+                        .setPositiveButton("OK") { _, _ -> }
+                        .show()
+                }) { Text("Save as draft") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showOfflineDialog = false }) { Text("Cancel") }
+            }
+        )
     }
 }
 
@@ -136,45 +225,5 @@ private fun SendMethodChip(selected: Boolean, label: String, onClick: () -> Unit
         colors = CardDefaults.cardColors(containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant)
     ) {
         Text(label, modifier = Modifier.padding(12.dp), fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
-    }
-}
-
-private fun sendToAuthority(context: Context, a: com.arin.civicreport.model.Authority, method: String, body: String, mediaUri: String?) {
-    val subject = "Civic Incident Report: ${a.name} - ${a.level}"
-    val mail = if (method in listOf("email", "both")) {
-        Intent(Intent.ACTION_SENDTO).apply {
-            data = android.net.Uri.parse("mailto:${a.email}")
-            putExtra(Intent.EXTRA_SUBJECT, subject)
-            putExtra(Intent.EXTRA_TEXT, body)
-            mediaUri?.let {
-                putExtra(Intent.EXTRA_STREAM, Uri.parse(it))
-                addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
-        }
-    } else null
-    val sms = if (method in listOf("sms", "both")) {
-        Intent(Intent.ACTION_SENDTO).apply {
-            data = android.net.Uri.parse("smsto:${a.phone}")
-            putExtra(Intent.EXTRA_TEXT, body)
-        }
-    } else null
-
-    mail?.let {
-        try { context.startActivity(it) } catch (e: Exception) {
-            android.app.AlertDialog.Builder(context)
-                .setTitle("No email app")
-                .setMessage("Install an email app to send by email.")
-                .setPositiveButton("OK") { _, _ -> }
-                .show()
-        }
-    }
-    sms?.let {
-        try { context.startActivity(it) } catch (e: Exception) {
-            android.app.AlertDialog.Builder(context)
-                .setTitle("No SMS app")
-                .setMessage("Install an SMS app to send by SMS.")
-                .setPositiveButton("OK") { _, _ -> }
-                .show()
-        }
     }
 }

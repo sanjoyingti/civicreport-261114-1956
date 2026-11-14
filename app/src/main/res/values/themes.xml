@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- No XML theme needed for a pure Compose app. Keep an empty theme file so the manifest
-         reference @style/Theme.CivicReport does not crash, but the Compose theme is what is used. -->
+    <style name="Theme.CivicReport" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
 </resources>

@@ -15,7 +15,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 import androidx.navigation.compose.rememberNavController
 import com.arin.civicreport.data.CivicDatabase
@@ -40,7 +39,7 @@ class MainActivity : ComponentActivity() {
             val repo = remember { Repository(db) }
             val prefs = remember { Prefs(context) }
 
-            CivicReportTheme(darkTheme = remember { false }) {
+            CivicReportTheme() {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background

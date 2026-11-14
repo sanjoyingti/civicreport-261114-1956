@@ -41,7 +41,10 @@ fun CaptureScreen(
     var previewView by remember { mutableStateOf<PreviewView?>(null) }
     var cameraReady by remember { mutableStateOf(false) }
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        uri?.let { onChooseGallery(it, if (captureMode == VideoMode) "video" else "photo") }
+        uri?.let {
+            val type = if (it.toString().lowercase().endsWith(".mp4") || it.toString().lowercase().endsWith(".webm")) "video" else "photo"
+            onChooseGallery(it, type)
+        }
     }
 
     LaunchedEffect(Unit) {

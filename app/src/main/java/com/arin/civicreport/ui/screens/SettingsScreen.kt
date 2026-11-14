@@ -2,6 +2,7 @@ package com.arin.civicreport.ui.screens
 
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -15,7 +16,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.arin.civicreport.data.Repository
 import com.arin.civicreport.ui.util.Prefs
-import com.arin.civicreport.BuildConfig
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -43,7 +43,11 @@ fun SettingsScreen(
             .fillMaxSize()
             .padding(padding)
             .padding(16.dp)) {
-            SwitchListRow(title = "Location services", subtitle = "Auto-detect GPS coordinates", checked = prefs.enableLocationServices) {
+            SwitchListRow(
+                title = "Location services",
+                subtitle = "Auto-detect GPS coordinates",
+                checked = prefs.enableLocationServices
+            ) {
                 prefs.enableLocationServices = it
             }
             Spacer(modifier = Modifier.height(4.dp))
@@ -52,7 +56,11 @@ fun SettingsScreen(
                 SegmentedButtonRow(selected = prefs.defaultSendMethod, onChange = { prefs.defaultSendMethod = it })
             }
             Spacer(modifier = Modifier.height(4.dp))
-            SwitchListRow(title = "Notifications", subtitle = "Show send confirmations", checked = prefs.notificationsEnabled) {
+            SwitchListRow(
+                title = "Notifications",
+                subtitle = "Show send confirmations",
+                checked = prefs.notificationsEnabled
+            ) {
                 prefs.notificationsEnabled = it
             }
             Spacer(modifier = Modifier.height(16.dp))
@@ -60,9 +68,24 @@ fun SettingsScreen(
                 Column(modifier = Modifier.padding(12.dp)) {
                     Text("Permission help", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Text("Tap to request camera/location/SMS permissions if the app asks for them.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Button(onClick = { onRequestPermission(android.Manifest.permission.CAMERA) }, modifier = Modifier.padding(top = 8.dp)) { Text("Request Camera") }
-                    Button(onClick = { onRequestPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) }, modifier = Modifier.padding(top = 8.dp)) { Text("Request Location") }
-                    Button(onClick = { onRequestPermission(android.Manifest.permission.SEND_SMS) }, modifier = Modifier.padding(top = 8.dp)) { Text("Request SMS") }
+                    Button(
+                        onClick = { onRequestPermission(android.Manifest.permission.CAMERA) },
+                        modifier = Modifier.padding(top = 8.dp)
+                    ) { Text("Request Camera") }
+                    Button(
+                        onClick = { onRequestPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) },
+                        modifier = Modifier.padding(top = 8.dp)
+                    ) { Text("Request Location") }
+                    Button(
+                        onClick = { onRequestPermission(android.Manifest.permission.SEND_SMS) },
+                        modifier = Modifier.padding(top = 8.dp)
+                    ) { Text("Request SMS") }
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        Button(
+                            onClick = { onRequestPermission(android.Manifest.permission.POST_NOTIFICATIONS) },
+                            modifier = Modifier.padding(top = 8.dp)
+                        ) { Text("Request Notifications") }
+                    }
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))
@@ -74,13 +97,20 @@ fun SettingsScreen(
                         OutlinedTextField(value = authorityPhone, onValueChange = { authorityPhone = it }, modifier = Modifier.fillMaxWidth(), placeholder = { Text("Phone") })
                         OutlinedTextField(value = authorityEmail, onValueChange = { authorityEmail = it }, modifier = Modifier.fillMaxWidth(), placeholder = { Text("Email") })
                         OutlinedTextField(value = authorityLevel, onValueChange = { authorityLevel = it }, modifier = Modifier.fillMaxWidth(), placeholder = { Text("Local/State/Central") })
-                        Button(onClick = {
-                            val a = com.arin.civicreport.model.Authority("custom_${System.currentTimeMillis()}", authorityName, authorityPhone, authorityEmail, authorityLevel, emptyList(), emptyList(), emptyList(), 99)
-                            repo.addAuthority(a)
-                            authorityName = ""; authorityPhone = ""; authorityEmail = ""; authorityLevel = "Local"
-                            editMode = false
-                            android.app.AlertDialog.Builder(context).setTitle("Added").setMessage("Authority saved locally.").setPositiveButton("OK") { _, _ -> }.show()
-                        }, modifier = Modifier.padding(top = 8.dp)) { Text("Add authority") }
+                        Button(
+                            onClick = {
+                                val a = com.arin.civicreport.model.Authority(
+                                    "custom_${System.currentTimeMillis()}",
+                                    authorityName, authorityPhone, authorityEmail,
+                                    authorityLevel, emptyList(), emptyList(), emptyList(), 99
+                                )
+                                repo.addAuthority(a)
+                                authorityName = ""; authorityPhone = ""; authorityEmail = ""; authorityLevel = "Local"
+                                editMode = false
+                                android.app.AlertDialog.Builder(context).setTitle("Added").setMessage("Authority saved locally.").setPositiveButton("OK") { _, _ -> }.show()
+                            },
+                            modifier = Modifier.padding(top = 8.dp)
+                        ) { Text("Add authority") }
                     } else {
                         Button(onClick = { editMode = true }, modifier = Modifier.padding(top = 8.dp)) { Text("Add authority") }
                     }
@@ -90,13 +120,15 @@ fun SettingsScreen(
             Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     Text("About", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text("App version: ${BuildConfig.VERSION_NAME ?: "1.0"}", style = MaterialTheme.typography.bodyMedium)
+                    Text("App version: 1.0.0", style = MaterialTheme.typography.bodyMedium)
                     Text("Developer: CivicReport team. All data is stored locally on your device.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    TextButton(onClick = {
-                        try {
-                            context.startActivity(Intent(android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS))
-                        } catch (e: Exception) {}
-                    }) {
+                    TextButton(
+                        onClick = {
+                            try {
+                                context.startActivity(Intent(android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS))
+                            } catch (e: Exception) {}
+                        }
+                    ) {
                         Text("Open system location settings")
                     }
                 }
