@@ -14,16 +14,21 @@ import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 
+data class MapViewProviderState(
+    val mapView: MapView
+)
+
 @Composable
 fun MapViewProvider(
     initialPoint: GeoPoint? = null,
     initialAddress: String = "",
     onPointChanged: (GeoPoint) -> Unit
-): MapView {
+): MapViewProviderState? {
     val lifecycleOwner = LocalLifecycleOwner.current
     val view = LocalView.current
     var mapView by remember { mutableStateOf<MapView?>(null) }
     var selectedPoint by remember(initialPoint) { mutableStateOf(initialPoint) }
+    var state by remember { mutableStateOf<MapViewProviderState?>(null) }
 
     val registry = remember {
         LifecycleRegistry(lifecycleOwner).apply {
@@ -47,6 +52,7 @@ fun MapViewProvider(
             }
         }
         mapView = m
+        state = MapViewProviderState(m)
         registry.currentState = Lifecycle.State.STARTED
         registry.currentState = Lifecycle.State.RESUMED
         onDispose {
@@ -54,5 +60,5 @@ fun MapViewProvider(
         }
     }
 
-    return mapView!!
+    return state
 }

@@ -101,7 +101,7 @@ fun ReviewAndSendScreen(
 
     Scaffold(topBar = {
         TopAppBar(
-            title = { Text("Review &amp; Send", fontWeight = FontWeight.Bold) },
+            title = { Text("Review and Send", fontWeight = FontWeight.Bold) },
             navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, contentDescription = "Back") } }
         )
     }) { padding ->
@@ -166,7 +166,7 @@ fun ReviewAndSendScreen(
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !sending && selected.isNotEmpty()
             ) {
-                Text(if (sending) "Sending…" else "Send All")
+                Text(if (sending) "Sending..." else "Send All")
             }
         }
     }
