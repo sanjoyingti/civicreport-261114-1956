@@ -9,16 +9,16 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.view.WindowCompat
 import androidx.navigation.compose.rememberNavController
 import com.arin.civicreport.data.CivicDatabase
 import com.arin.civicreport.data.Repository
+import com.arin.civicreport.ui.navigation.AppNavigation
 import com.arin.civicreport.ui.theme.CivicReportTheme
 import com.arin.civicreport.ui.util.PermissionManager
 import com.arin.civicreport.ui.util.Prefs
-import com.arin.civicreport.ui.util.PermissionManager as PM
-import androidx.compose.ui.Modifier
 
 class MainActivity : ComponentActivity() {
 
@@ -38,15 +38,15 @@ class MainActivity : ComponentActivity() {
             val pm = rememberPermissionManager()
 
             CivicReportTheme {
-                Surface(modifier = androidx.compose.Modifier.fillMaxSize(), color = androidx.compose.material3.MaterialTheme.colorScheme.background) {
+                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     AppNavigation(
                         navController = rememberNavController(),
                         repo = repo,
                         prefs = prefs,
                         permissionManager = pm,
-                        onGetContentUri = { uri -> uri },
-                        onUriSaved = { file, kind -> },
-                        mediaTypeFromUri = { uri -> if (uri.toString().endsWith(".mp4", ignoreCase = true)) "video" else "photo" }
+                        onGetContentUri = { uri: android.net.Uri -> uri },
+                        onUriSaved = { file: java.io.File, kind: String -> },
+                        mediaTypeFromUri = { uri: android.net.Uri -> if (uri.toString().endsWith(".mp4", ignoreCase = true)) "video" else "photo" }
                     )
                 }
             }
