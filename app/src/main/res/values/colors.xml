@@ -1,7 +1,1 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <color name="status_draft">#787D83</color>
-    <color name="status_pending">#FFA600</color>
-    <color name="status_sent">#1967D2</color>
-    <color name="status_failed">#B3261E</color>
-</resources>
+
