@@ -26,10 +26,10 @@ fun StatusBadge(status: IncidentStatus) {
     }
     Surface(color = background, shape = MaterialTheme.shapes.small) {
         Text(
-            text = status.name,
-            color = textColour,
+            text = status.name.uppercase(),
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
             style = MaterialTheme.typography.labelSmall,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+            color = textColour
         )
     }
 }
