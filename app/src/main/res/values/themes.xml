@@ -1,10 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <style name="Theme.CivicReport" parent="Theme.Material3.DayNight.NoActionBar">
-        <item name="android:windowBackground">@color/window_background</item>
-        <item name="android:statusBarColor">@android:color/transparent</item>
-        <item name="android:navigationBarColor">@android:color/transparent</item>
-        <item name="colorPrimary">@color/brand_green</item>
+<resources xmlns:tools="http://schemas.android.com/tools">
+
+    <style name="Theme.CivicReport" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">#FBFDF7</item>
+        <item name="android:colorBackground">#FBFDF7</item>
+        <item name="android:statusBarColor">#FBFDF7</item>
+        <item name="android:navigationBarColor">#FBFDF7</item>
+        <item name="android:colorPrimary">#206039</item>
+        <item name="android:colorAccent">#206039</item>
         <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="27">true</item>
+        <item name="android:windowSoftInputMode">adjustResize</item>
     </style>
+
 </resources>

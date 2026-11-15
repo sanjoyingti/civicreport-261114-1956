@@ -1,6 +1,9 @@
 package com.arin.civicreport.ui.screens
 
-import androidx.compose.foundation.clickable
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,11 +13,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -24,9 +30,9 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -37,6 +43,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.arin.civicreport.data.Repository
@@ -45,10 +52,16 @@ import com.arin.civicreport.model.IncidentType
 import com.arin.civicreport.ui.screens.report.ReportFlowViewModel
 import java.util.Locale
 
-private fun levelRank(level: String): Int = when (level) {
-    "Local" -> 0
-    "State" -> 1
+private fun levelRank(level: String): Int = when (level.lowercase(Locale.US)) {
+    "local" -> 0
+    "state" -> 1
     else -> 2
+}
+
+private fun levelTitle(level: String): String = when (level.lowercase(Locale.US)) {
+    "local" -> "Your local office"
+    "state" -> "State level"
+    else -> "National level"
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -59,211 +72,206 @@ fun AuthorityFinderScreen(
     onBack: () -> Unit,
     onContinue: () -> Unit
 ) {
+    val context = LocalContext.current
     val draft by reportViewModel.draft.collectAsState()
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
-    var reloadKey by remember { mutableStateOf(0) }
-    var showEmptyDialog by remember { mutableStateOf(false) }
-    var showAllLevels by remember { mutableStateOf(true) }
+    var refresh by remember { mutableStateOf(0) }
 
-    LaunchedEffect(draft.incidentTypes, draft.state, draft.city, draft.district, reloadKey) {
+    LaunchedEffect(draft.incidentTypes, draft.state, draft.city, refresh) {
         loading = true
         error = null
-        val found = LinkedHashMap<String, Authority>()
         try {
-            val city = draft.city.lowercase(Locale.getDefault()).trim()
+            val city = draft.city.lowercase(Locale.US).trim()
+            val found = linkedMapOf<String, Authority>()
             draft.incidentTypes.forEach { tag ->
-                repo.getAuthoritiesForIncident(tag, draft.state.trim(), city).forEach { hit ->
-                    found[hit.id] = hit
+                repo.getAuthoritiesForIncident(tag, draft.state.trim(), city).forEach { candidate ->
+                    found[candidate.id] = candidate
                 }
             }
+            reportViewModel.setAuthorities(
+                found.values.sortedWith(compareBy({ levelRank(it.level) }, { it.order }))
+            )
         } catch (e: Exception) {
-            error = e.message ?: "The authority lookup failed."
+            error = e.message ?: "The responsible offices could not be looked up"
         }
-        val sorted = found.values.sortedWith(compareBy({ levelRank(it.level) }, { it.order }))
-        reportViewModel.setAuthorities(sorted, sorted.map { it.id })
         loading = false
     }
 
-    val authorities = draft.authorities
-    val selectedIds = draft.selectedAuthorityIds
-    val shown = if (showAllLevels) authorities else authorities.filter { it.level != "Central" }
+    fun open(intent: Intent) {
+        try {
+            context.startActivity(intent)
+        } catch (e: ActivityNotFoundException) {
+            Toast.makeText(context, "No app on this phone can open that", Toast.LENGTH_SHORT).show()
+        }
+    }
 
-    Scaffold(topBar = {
-        TopAppBar(
-            title = { Text("Concerned officials", fontWeight = FontWeight.Bold) },
-            navigationIcon = {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Who to tell", fontWeight = FontWeight.Bold) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
+                    }
                 }
-            },
-            actions = {
-                IconButton(onClick = { reloadKey++ }) {
-                    Icon(Icons.Filled.Refresh, contentDescription = "Search again")
+            )
+        },
+        bottomBar = {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Button(
+                    onClick = onContinue,
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = draft.selectedAuthorityIds.isNotEmpty()
+                ) {
+                    Text("Continue with ${draft.selectedAuthorityIds.size} office(s)")
                 }
             }
-        )
-    }) { padding ->
+        }
+    ) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(16.dp)
+                .padding(horizontal = 16.dp)
         ) {
-            val kindText = draft.incidentTypes.joinToString(", ") { IncidentType.titleFor(it) }
             Text(
-                "Matched offices for: $kindText",
-                style = MaterialTheme.typography.bodyLarge,
+                draft.incidentTypes.joinToString(", ") { IncidentType.titleFor(it) },
+                style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )
             Text(
-                if (draft.state.isBlank())
-                    "State not detected yet - showing all-India offices. You can still tick the ones you want."
-                else
-                    "Jurisdiction: ${draft.district.ifBlank { draft.city.ifBlank { draft.state } }}, ${draft.state}",
+                "Matched for ${draft.address.ifBlank { "the pinned location" }}",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(modifier = Modifier.height(8.dp))
 
-            if (error != null) {
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer
-                    )
-                ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Text(
-                            error ?: "",
-                            color = MaterialTheme.colorScheme.onErrorContainer
-                        )
-                        TextButton(onClick = { reloadKey++ }) { Text("Try again") }
+            when {
+                loading -> {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            CircularProgressIndicator()
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text("Finding the responsible offices...")
+                        }
                     }
                 }
-                Spacer(modifier = Modifier.height(8.dp))
-            }
-
-            if (loading) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(200.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CircularProgressIndicator()
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text("Searching the right departments...", style = MaterialTheme.typography.bodyMedium)
+                error != null -> {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(error ?: "", color = MaterialTheme.colorScheme.error)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            OutlinedButton(onClick = { refresh++ }) { Text("Try again") }
+                        }
                     }
                 }
-            } else if (authorities.isEmpty()) {
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
-                ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Text("No office matched this incident.", fontWeight = FontWeight.Bold)
-                        Text(
-                            "Move the pin to a spot with a known state, or add a contact for your area in Settings.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        TextButton(onClick = onBack) { Text("Go back and fix the location") }
-                    }
-                }
-            } else {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { showAllLevels = !showAllLevels }
-                        .padding(vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Checkbox(checked = showAllLevels, onCheckedChange = { showAllLevels = it })
-                    Text(
-                        "Include Chief Minister office and PMO",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                }
-                androidx.compose.foundation.lazy.LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(shown.size) { index ->
-                        val authority = shown[index]
-                        val checked = selectedIds.contains(authority.id)
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { reportViewModel.toggleAuthority(authority.id) },
-                            shape = RoundedCornerShape(12.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = if (checked)
-                                    MaterialTheme.colorScheme.primaryContainer
-                                else MaterialTheme.colorScheme.surfaceVariant
+                draft.authorities.isEmpty() -> {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("No office matched this problem yet")
+                            Text(
+                                "Add a contact in Settings and it will appear for every report.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(12.dp),
-                                verticalAlignment = Alignment.Top
-                            ) {
-                                Checkbox(
-                                    checked = checked,
-                                    onCheckedChange = { reportViewModel.toggleAuthority(authority.id) }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            OutlinedButton(onClick = { refresh++ }) { Text("Search again") }
+                        }
+                    }
+                }
+                else -> {
+                    val grouped = draft.authorities.groupBy { levelTitle(it.level) }
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        grouped.forEach { (title, list) ->
+                            item { Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold) }
+                            items(list) { authority ->
+                                AuthorityRow(
+                                    authority = authority,
+                                    checked = draft.selectedAuthorityIds.contains(authority.id),
+                                    onToggle = { reportViewModel.toggleAuthority(authority.id) },
+                                    onCall = {
+                                        open(Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + authority.phone)))
+                                    },
+                                    onMail = {
+                                        open(
+                                            Intent(
+                                                Intent.ACTION_SENDTO,
+                                                Uri.parse("mailto:" + authority.email)
+                                            )
+                                        )
+                                    },
+                                    onSms = {
+                                        open(
+                                            Intent(
+                                                Intent.ACTION_SENDTO,
+                                                Uri.parse("smsto:" + authority.phone)
+                                            )
+                                        )
+                                    }
                                 )
-                                Column(modifier = Modifier.padding(top = 12.dp)) {
-                                    Text(authority.name, fontWeight = FontWeight.Bold)
-                                    Text(
-                                        authority.level,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    if (authority.email.isNotBlank()) {
-                                        Text(
-                                            authority.email,
-                                            style = MaterialTheme.typography.bodySmall
-                                        )
-                                    }
-                                    if (authority.phone.isNotBlank()) {
-                                        Text(
-                                            authority.phone,
-                                            style = MaterialTheme.typography.bodySmall
-                                        )
-                                    }
-                                }
                             }
                         }
-                        Spacer(modifier = Modifier.height(0.dp))
+                        item { Spacer(modifier = Modifier.height(8.dp)) }
                     }
                 }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                "${selectedIds.size} office(s) selected",
-                style = MaterialTheme.typography.bodyMedium
-            )
-            Button(
-                onClick = {
-                    if (selectedIds.isEmpty()) showEmptyDialog = true else onContinue()
-                },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !loading
-            ) {
-                Text("Continue to review")
             }
         }
     }
+}
 
-    if (showEmptyDialog) {
-        AlertDialog(
-            onDismissRequest = { showEmptyDialog = false },
-            title = { Text("Nobody selected") },
-            text = { Text("Tick at least one office so the complaint has a recipient.") },
-            confirmButton = {
-                TextButton(onClick = { showEmptyDialog = false }) { Text("OK") }
-            }
+@Composable
+private fun AuthorityRow(
+    authority: Authority,
+    checked: Boolean,
+    onToggle: () -> Unit,
+    onCall: () -> Unit,
+    onMail: () -> Unit,
+    onSms: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = if (checked) MaterialTheme.colorScheme.primaryContainer
+            else MaterialTheme.colorScheme.surfaceVariant
         )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Checkbox(checked = checked, onCheckedChange = { onToggle() })
+            Column(modifier = Modifier.weight(1f)) {
+                Text(authority.name, fontWeight = FontWeight.Bold)
+                if (authority.phone.isNotBlank()) {
+                    Text(authority.phone, style = MaterialTheme.typography.bodySmall)
+                }
+                if (authority.email.isNotBlank()) {
+                    Text(authority.email, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+            if (checked) {
+                Icon(
+                    Icons.Filled.CheckCircle,
+                    contentDescription = "Selected",
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+            if (authority.phone.isNotBlank()) {
+                IconButton(onClick = onCall) {
+                    Icon(Icons.Filled.Call, contentDescription = "Call")
+                }
+                IconButton(onClick = onSms) {
+                    Icon(Icons.Filled.Sms, contentDescription = "Text")
+                }
+            }
+            if (authority.email.isNotBlank()) {
+                IconButton(onClick = onMail) {
+                    Icon(Icons.Filled.Email, contentDescription = "E-mail")
+                }
+            }
+        }
     }
 }

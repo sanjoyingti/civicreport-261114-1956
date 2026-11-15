@@ -5,7 +5,9 @@ import com.arin.civicreport.model.Authority
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 
+/** Everything collected while the user walks through the reporting steps. */
 data class ReportDraft(
     val incidentTypes: List<String> = emptyList(),
     val mediaUri: String? = null,
@@ -19,8 +21,7 @@ data class ReportDraft(
     val pincode: String = "",
     val description: String = "",
     val authorities: List<Authority> = emptyList(),
-    val selectedAuthorityIds: List<String> = emptyList(),
-    val sendMethod: String = "both"
+    val selectedAuthorityIds: Set<String> = emptySet()
 ) {
     val hasLocation: Boolean get() = latitude != 0.0 || longitude != 0.0
 }
@@ -30,57 +31,67 @@ class ReportFlowViewModel : ViewModel() {
     private val _draft = MutableStateFlow(ReportDraft())
     val draft: StateFlow<ReportDraft> = _draft.asStateFlow()
 
-    fun start(types: List<String>) {
-        _draft.value = ReportDraft(incidentTypes = types)
+    fun reset() {
+        _draft.value = ReportDraft()
     }
 
-    fun setMedia(uri: String, mediaType: String) {
-        _draft.value = _draft.value.copy(mediaUri = uri, mediaType = mediaType)
+    fun start(types: List<String>) {
+        _draft.update {
+            it.copy(
+                incidentTypes = types,
+                authorities = emptyList(),
+                selectedAuthorityIds = emptySet()
+            )
+        }
+    }
+
+    fun setMedia(uri: String, type: String) {
+        _draft.update { it.copy(mediaUri = uri, mediaType = type) }
     }
 
     fun setLocation(
         latitude: Double,
         longitude: Double,
         address: String,
-        city: String = "",
-        district: String = "",
-        state: String = "",
-        pincode: String = ""
+        city: String,
+        district: String,
+        state: String,
+        pincode: String
     ) {
-        _draft.value = _draft.value.copy(
-            latitude = latitude,
-            longitude = longitude,
-            address = address,
-            city = city,
-            district = district,
-            state = state,
-            pincode = pincode
-        )
+        _draft.update {
+            it.copy(
+                latitude = latitude,
+                longitude = longitude,
+                address = address,
+                city = city,
+                district = district,
+                state = state,
+                pincode = pincode
+            )
+        }
     }
 
     fun setDescription(text: String) {
-        _draft.value = _draft.value.copy(description = text)
+        _draft.update { it.copy(description = text) }
     }
 
-    fun setAuthorities(authorities: List<Authority>, selectedIds: List<String>) {
-        _draft.value = _draft.value.copy(
-            authorities = authorities,
-            selectedAuthorityIds = selectedIds
-        )
+    fun setAuthorities(list: List<Authority>) {
+        _draft.update {
+            it.copy(
+                authorities = list,
+                selectedAuthorityIds = list.map { authority -> authority.id }.toSet()
+            )
+        }
     }
 
     fun toggleAuthority(id: String) {
-        val current = _draft.value.selectedAuthorityIds
-        _draft.value = _draft.value.copy(
-            selectedAuthorityIds = if (current.contains(id)) current - id else current + id
-        )
-    }
-
-    fun setSendMethod(method: String) {
-        _draft.value = _draft.value.copy(sendMethod = method)
-    }
-
-    fun reset() {
-        _draft.value = ReportDraft()
+        _draft.update { current ->
+            val ids = if (current.selectedAuthorityIds.contains(id)) {
+                current.selectedAuthorityIds - id
+            } else {
+                current.selectedAuthorityIds + id
+            }
+            current.copy(selectedAuthorityIds = ids)
+        }
     }
 }

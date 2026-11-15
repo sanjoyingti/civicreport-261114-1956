@@ -1,9 +1,15 @@
 package com.arin.civicreport.ui.util
 
+import android.Manifest
+import android.app.Activity
+import android.content.ClipData
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
-import android.util.Log
+import android.telephony.SmsManager
+import android.widget.Toast
+import androidx.core.content.ContextCompat
 import com.arin.civicreport.model.Authority
 import com.arin.civicreport.model.IncidentType
 import com.arin.civicreport.model.Report
@@ -11,120 +17,152 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-/** Composes the complaint and hands it to the email / SMS app installed on the phone. */
+/** Opens the e-mail app / sends SMS so a report reaches the selected offices. */
 object ReportSender {
 
-    private const val TAG = "CivicReport"
+    fun send(context: Context, authorities: List<Authority>, report: Report, method: String) {
+        val emails = authorities.map { it.email }.filter { it.isNotBlank() }
+        val phones = authorities.map { it.phone }.filter { it.isNotBlank() }
+        val subject = subjectFor(report)
+        val body = bodyFor(report)
 
-    fun buildSubject(report: Report): String {
-        val kinds = report.incidentTypes.joinToString(", ") { IncidentType.titleFor(it) }
-        val place = report.address.ifBlank { report.city.ifBlank { "the reported location" } }
-        return "Complaint: $kinds at $place"
+        if (method == "email" || method == "both") {
+            if (emails.isNotEmpty()) {
+                openEmail(context, emails, subject, body, report.mediaUris.firstOrNull(), report.mediaType)
+            }
+        }
+        if (method == "sms" || method == "both") {
+            if (phones.isNotEmpty()) {
+                sendSms(context, phones, shortMessage(subject, report))
+            }
+        }
     }
 
-    fun buildBody(report: Report): String {
-        val types = report.incidentTypes.joinToString(", ") { IncidentType.titleFor(it) }
-        val whenText = SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault())
-            .format(Date(report.timestamp))
+    fun resend(context: Context, authorities: List<Authority>, report: Report) {
+        send(context, authorities, report, report.sendMethod.ifBlank { "both" })
+    }
+
+    private fun subjectFor(report: Report): String {
+        val issue = report.incidentTypes.joinToString(", ") { IncidentType.titleFor(it) }
+        return "Civic complaint: $issue at ${report.address.ifBlank { "reported location" }}"
+    }
+
+    private fun bodyFor(report: Report): String {
         val builder = StringBuilder()
-        builder.appendLine("Respected Sir/Madam,")
+        builder.appendLine("Sir / Madam,")
         builder.appendLine()
-        builder.appendLine("I wish to report the following civic / environmental problem through the DuarBagori Reports app.")
-        builder.appendLine()
-        builder.appendLine("Incident: $types")
-        builder.appendLine("Reported on: $whenText")
-        builder.appendLine("Address: ${report.address.ifBlank { "not resolved by the geocoder" }}")
-        if (report.district.isNotBlank()) builder.appendLine("District: ${report.district}")
-        if (report.state.isNotBlank()) builder.appendLine("State: ${report.state}")
-        if (report.pincode.isNotBlank()) builder.appendLine("PIN: ${report.pincode}")
-        builder.appendLine(
-            "GPS: ${String.format(Locale.US, "%.6f", report.latitude)}, " +
-                String.format(Locale.US, "%.6f", report.longitude)
-        )
-        builder.appendLine(
-            "Map: https://www.google.com/maps/search/?api=1&query=" +
-                "${report.latitude},${report.longitude}"
-        )
+        builder.appendLine("I wish to report the following civic problem:")
+        builder.appendLine("Issue: " + report.incidentTypes.joinToString(", ") { IncidentType.titleFor(it) })
+        builder.appendLine("Location: " + report.address.ifBlank { "not provided" })
+        builder.appendLine(String.format(Locale.US, "GPS coordinates: %.6f, %.6f", report.latitude, report.longitude))
+        val area = listOf(report.city, report.district, report.state)
+            .filter { it.isNotBlank() }
+            .joinToString(", ")
+        if (area.isNotBlank()) builder.appendLine("City / District / State: $area")
+        if (report.pincode.isNotBlank()) builder.appendLine("PIN code: ${report.pincode}")
         if (report.description.isNotBlank()) {
             builder.appendLine()
             builder.appendLine("Details: ${report.description}")
         }
-        if (report.mediaUris.isNotEmpty()) {
-            builder.appendLine()
-            builder.appendLine("A ${report.mediaType} of the spot is attached / sent along and is stored with this complaint.")
-        }
         builder.appendLine()
-        builder.appendLine("Kindly inspect the spot and take the needed action. Please treat this as a formal grievance.")
+        builder.appendLine(
+            "Reported on: " +
+                SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault()).format(Date(report.timestamp))
+        )
+        builder.appendLine("A photo/video of the spot is attached.")
         builder.appendLine()
-        builder.appendLine("Regards,")
-        builder.appendLine("A citizen using DuarBagori Reports")
+        builder.append("Regards,")
+        builder.appendLine()
+        builder.append("A concerned citizen (sent with DuarBagori Reports)")
         return builder.toString()
     }
 
-    fun buildSms(report: Report): String {
-        val types = report.incidentTypes.joinToString(", ") { IncidentType.titleFor(it) }
-        val gps = String.format(Locale.US, "%.5f,%.5f", report.latitude, report.longitude)
-        val place = report.address.ifBlank { report.city.ifBlank { "unknown" } }
-        val notes = if (report.description.isNotBlank()) " Notes: ${report.description}" else ""
-        return "Complaint ($types) at $place. GPS: $gps. Map: " +
-            "https://maps.google.com/?q=$gps.$notes - sent via DuarBagori Reports"
+    private fun shortMessage(subject: String, report: Report): String {
+        val text = StringBuilder()
+        text.append(subject)
+        text.append(" | GPS: ")
+        text.append(String.format(Locale.US, "%.6f, %.6f", report.latitude, report.longitude))
+        if (report.description.isNotBlank()) {
+            text.append(" | ")
+            text.append(report.description)
+        }
+        text.append(" | via DuarBagori Reports")
+        return if (text.length > 320) text.substring(0, 317) + "..." else text.toString()
     }
 
-    /** Opens the email and/or SMS app. Errors are swallowed so the saved report is never lost. */
-    fun send(context: Context, authorities: List<Authority>, report: Report, method: String) {
-        val emails = authorities.map { it.email }.filter { it.isNotBlank() }.distinct()
-        val phones = authorities.map { it.phone }.filter { it.isNotBlank() }.distinct()
-
-        if ((method == "email" || method == "both") && emails.isNotEmpty()) {
-            launch(context, emailIntent(context, emails, report))
-        }
-        if ((method == "sms" || method == "both") && phones.isNotEmpty()) {
-            launch(context, smsIntent(phones, report))
-        }
-    }
-
-    /** Resend helper for one report from the details screen. */
-    fun resend(context: Context, authorities: List<Authority>, report: Report) {
-        val method = when {
-            authorities.any { it.email.isNotBlank() } && report.sendMethod == "both" -> "both"
-            report.sendMethod.isBlank() -> "both"
-            else -> report.sendMethod
-        }
-        send(context, authorities, report, method)
-    }
-
-    private fun emailIntent(context: Context, recipients: List<String>, report: Report): Intent {
-        val media = report.mediaUris.firstOrNull()
-        val intent = if (media != null) {
-            Intent(Intent.ACTION_SEND).apply {
-                type = if (report.mediaType == "video") "video/*" else "image/*"
-                putExtra(Intent.EXTRA_STREAM, Uri.parse(media))
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
+    private fun start(context: Context, intent: Intent) {
+        val safeIntent = if (context !is Activity) {
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         } else {
-            Intent(Intent.ACTION_SENDTO).apply {
-                data = Uri.parse("mailto:")
-            }
+            intent
         }
-        intent.putExtra(Intent.EXTRA_EMAIL, recipients.toTypedArray())
-        intent.putExtra(Intent.EXTRA_SUBJECT, buildSubject(report))
-        intent.putExtra(Intent.EXTRA_TEXT, buildBody(report))
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        return intent
+        try {
+            context.startActivity(safeIntent)
+        } catch (e: Exception) {
+            Toast.makeText(context, "No app on this phone can open that", Toast.LENGTH_LONG).show()
+        }
     }
 
-    private fun smsIntent(phones: List<String>, report: Report): Intent =
-        Intent(Intent.ACTION_SENDTO).apply {
-            data = Uri.parse("smsto:" + phones.joinToString(","))
-            putExtra("sms_body", buildSms(report))
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    private fun openEmail(
+        context: Context,
+        emails: List<String>,
+        subject: String,
+        body: String,
+        mediaUri: String?,
+        mediaType: String
+    ) {
+        if (mediaUri.isNullOrBlank()) {
+            val mailto = Uri.parse("mailto:" + emails.joinToString(","))
+            val intent = Intent(Intent.ACTION_SENDTO, mailto).apply {
+                putExtra(Intent.EXTRA_SUBJECT, subject)
+                putExtra(Intent.EXTRA_TEXT, body)
+            }
+            start(context, intent)
+            return
         }
+        val uri = Uri.parse(mediaUri)
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = if (mediaType == "video") "video/*" else "image/*"
+            putExtra(Intent.EXTRA_EMAIL, emails.toTypedArray())
+            putExtra(Intent.EXTRA_SUBJECT, subject)
+            putExtra(Intent.EXTRA_TEXT, body)
+            putExtra(Intent.EXTRA_STREAM, uri)
+            clipData = ClipData.newRawUri("report media", uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        start(context, Intent.createChooser(intent, "Send complaint with e-mail"))
+    }
 
-    private fun launch(context: Context, intent: Intent) {
-        try {
-            context.startActivity(intent)
-        } catch (e: Exception) {
-            Log.e(TAG, "Could not launch ${intent.action}", e)
+    private fun sendSms(context: Context, phones: List<String>, message: String) {
+        val canSend = ContextCompat.checkSelfPermission(context, Manifest.permission.SEND_SMS) ==
+            PackageManager.PERMISSION_GRANTED
+        if (!canSend) {
+            val uri = Uri.parse("smsto:" + phones.joinToString(","))
+            start(context, Intent(Intent.ACTION_SENDTO, uri).putExtra("sms_body", message))
+            return
+        }
+        var sent = 0
+        phones.forEach { raw ->
+            val number = raw.filter { it.isDigit() || it == '+' }
+            if (number.isBlank()) return@forEach
+            try {
+                val manager = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                    context.getSystemService(SmsManager::class.java)
+                } else {
+                    @Suppress("DEPRECATION")
+                    SmsManager.getDefault()
+                }
+                manager?.sendTextMessage(number, null, message, null, null)
+                sent++
+            } catch (e: Exception) {
+                // Keep going so one bad number does not stop the rest.
+            }
+        }
+        if (sent > 0) {
+            Toast.makeText(context, "SMS queued for $sent official(s)", Toast.LENGTH_SHORT).show()
+        } else {
+            val uri = Uri.parse("smsto:" + phones.joinToString(","))
+            start(context, Intent(Intent.ACTION_SENDTO, uri).putExtra("sms_body", message))
         }
     }
 }
