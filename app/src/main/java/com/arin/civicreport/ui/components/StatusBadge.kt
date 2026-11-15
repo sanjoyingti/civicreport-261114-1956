@@ -26,7 +26,11 @@ fun StatusBadge(status: IncidentStatus) {
         IncidentStatus.Failed -> MaterialTheme.colorScheme.onError
         IncidentStatus.Draft -> MaterialTheme.colorScheme.onSecondaryContainer
     }
-    Surface(color = background, shape = RoundedCornerShape(50)) {
+    Surface(
+        color = background,
+        shape = RoundedCornerShape(50),
+        modifier = Modifier.padding(vertical = 2.dp)
+    ) {
         Text(
             text = status.name,
             color = textColour,

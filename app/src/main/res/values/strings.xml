@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">DuarBagori Reports</string>
-    <string name="file_provider_authority">com.arin.civicreport.fileprovider</string>
-    <string name="report_new">Report incident</string>
-    <string name="recent_reports">Recent reports</string>
+    <string name="title_home">DuarBagori Reports</string>
+    <string name="title_settings">Settings</string>
+    <string name="report_incident">Report Incident</string>
 </resources>
