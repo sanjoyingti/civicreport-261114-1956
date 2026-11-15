@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<paths>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
     <external-files-path
         name="media"
         path="media/" />
@@ -7,6 +7,9 @@
         name="internal_media"
         path="media/" />
     <cache-path
-        name="cache_media"
+        name="cache"
+        path="." />
+    <external-cache-path
+        name="external_cache"
         path="." />
 </paths>
