@@ -1,9 +1,11 @@
 package com.arin.civicreport.ui.util
 
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.util.Log
+import android.widget.Toast
 import com.arin.civicreport.model.Authority
 import com.arin.civicreport.model.IncidentType
 import com.arin.civicreport.model.Report
@@ -12,56 +14,68 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Builds the complaint text and hands it to the phone's own email app / messaging app.
- * The app itself never talks to a server, so no account or backend is needed.
+ * Builds the complaint text and hands it to the phone's email or SMS app.
+ * Everything is pre-filled; the user only has to press send in that app.
  */
 object ReportSender {
 
-    private const val TAG = "ReportSender"
+    private const val TAG = "CivicReport"
 
-    fun subject(report: Report): String =
-        "Complaint: " + report.incidentTypes.joinToString(", ") { IncidentType.titleFor(it) }
-
-    fun body(report: Report): String {
-        val stamp = SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault()).format(Date(report.timestamp))
-        val mapLink = "https://www.openstreetmap.org/?mlat=${report.latitude}&mlon=${report.longitude}#map=18/${report.latitude}/${report.longitude}"
-        return buildString {
-            appendLine("Respected Sir/Madam,")
-            appendLine()
-            appendLine("I wish to report the following civic issue:")
-            appendLine()
-            appendLine("Issue type: " + report.incidentTypes.joinToString(", ") { IncidentType.titleFor(it) })
-            appendLine("Reported on: $stamp")
-            appendLine("Address: " + report.address.ifBlank { "not available" })
-            if (report.city.isNotBlank() || report.state.isNotBlank()) {
-                appendLine("Area: ${report.city} ${report.district} ${report.state} ${report.pincode}".trim())
-            }
-            appendLine("GPS: ${report.latitude}, ${report.longitude}")
-            appendLine("Map: $mapLink")
-            if (report.description.isNotBlank()) {
-                appendLine()
-                appendLine("Details: " + report.description)
-            }
-            appendLine()
-            appendLine("Photograph / video evidence is attached where possible.")
-            appendLine("Requesting early inspection and action.")
-            appendLine()
-            appendLine("Regards,")
-            appendLine("Citizen report filed with DuarBagori Reports")
+    fun composeMessage(report: Report): String {
+        val whenText = SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault())
+            .format(Date(report.timestamp))
+        val builder = StringBuilder()
+        builder.appendLine("CIVIC COMPLAINT filed via DuarBagori Reports")
+        builder.appendLine()
+        builder.appendLine(
+            "Incident: " + report.incidentTypes.joinToString(", ") { IncidentType.titleFor(it) }
+        )
+        builder.appendLine("Filed on: $whenText")
+        builder.appendLine("Address: " + report.address.ifBlank { "unknown" })
+        builder.appendLine(
+            String.format(Locale.US, "GPS location: %.6f, %.6f", report.latitude, report.longitude)
+        )
+        val area = listOf(report.city, report.district, report.state, report.pincode)
+            .filter { it.isNotBlank() }
+            .joinToString(", ")
+        if (area.isNotBlank()) builder.appendLine("Area: $area")
+        builder.appendLine(
+            "Attachment: " + report.mediaType.ifBlank { "photo" } +
+                " (" + report.mediaUris.size + " file)"
+        )
+        builder.appendLine("Local reference: #" + report.id)
+        if (report.description.isNotBlank()) {
+            builder.appendLine()
+            builder.appendLine("Notes: " + report.description)
         }
+        builder.appendLine()
+        builder.append(
+            "Requested action: please inspect the spot at the coordinates above and take " +
+                "corrective action at the earliest. Photographs and videos are attached."
+        )
+        return builder.toString()
     }
 
+    fun composeSubject(report: Report): String {
+        val first = report.incidentTypes.firstOrNull()
+        val title = if (first != null) IncidentType.titleFor(first) else "Civic issue"
+        val place = report.city.ifBlank { report.state }.ifBlank { report.address }
+        return "Complaint: $title" + if (place.isNotBlank()) " at $place" else ""
+    }
+
+    /** Sends the complaint to every authority that has a usable address for the chosen method. */
     fun send(context: Context, authorities: List<Authority>, report: Report, method: String) {
-        val emails = authorities.map { it.email.trim() }.filter { it.contains("@") }.distinct()
-        val phones = authorities.map { it.phone.trim() }.filter { it.isNotBlank() }.distinct()
-        val subject = subject(report)
-        val body = body(report)
+        val emails = authorities.map { it.email.trim() }.filter { it.isNotBlank() }
+        val phones = authorities.map { it.phone.trim() }.filter { it.isNotBlank() }
+        val message = composeMessage(report)
 
         if (method == "email" || method == "both") {
-            if (emails.isNotEmpty()) sendEmail(context, emails, subject, body, report)
+            if (emails.isNotEmpty()) sendEmail(context, emails, composeSubject(report), message, report)
+            else if (method == "email") toast(context, "No email address on the selected offices.")
         }
         if (method == "sms" || method == "both") {
-            if (phones.isNotEmpty()) sendSms(context, phones, body)
+            if (phones.isNotEmpty()) sendSms(context, phones, message)
+            else if (method == "sms") toast(context, "No phone number on the selected offices.")
         }
     }
 
@@ -69,65 +83,83 @@ object ReportSender {
         context: Context,
         emails: List<String>,
         subject: String,
-        body: String,
+        message: String,
         report: Report
     ) {
-        val media = report.mediaUris.firstOrNull { it.isNotBlank() }
-        val intent = Intent(Intent.ACTION_SEND).apply {
-            type = when {
-                media == null -> "text/plain"
-                report.mediaType == "video" -> "video/mp4"
-                else -> "image/jpeg"
-            }
+        val intent = Intent(
+            Intent.ACTION_SENDTO,
+            Uri.parse("mailto:" + emails.joinToString(","))
+        ).apply {
             putExtra(Intent.EXTRA_EMAIL, emails.toTypedArray())
             putExtra(Intent.EXTRA_SUBJECT, subject)
-            putExtra(Intent.EXTRA_TEXT, body)
-            if (media != null) {
-                putExtra(Intent.EXTRA_STREAM, Uri.parse(media))
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            putExtra(Intent.EXTRA_TEXT, message)
+        }
+        val attachments = report.mediaUris.mapNotNull { runCatching { Uri.parse(it) }.getOrNull() }
+        if (attachments.isNotEmpty()) {
+            intent.putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(attachments))
+            intent.type = if (report.mediaType == "video") "video/*" else "image/*"
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         try {
             context.startActivity(Intent.createChooser(intent, "Send complaint by email"))
+        } catch (e: ActivityNotFoundException) {
+            Log.e(TAG, "No email app", e)
+            toast(context, "No email app is installed on this phone.")
         } catch (e: Exception) {
-            Log.e(TAG, "Email intent failed", e)
-            sendMailTo(context, emails, subject, body)
+            Log.e(TAG, "Email failed", e)
+            toast(context, "The email app could not be opened.")
         }
     }
 
-    private fun sendMailTo(context: Context, emails: List<String>, subject: String, body: String) {
-        val uri = Uri.parse("mailto:" + emails.joinToString(",") + "?subject=" +
-            Uri.encode(subject) + "&body=" + Uri.encode(body))
-        val intent = Intent(Intent.ACTION_SENDTO, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    private fun sendSms(context: Context, phones: List<String>, message: String) {
+        val numbers = phones.map { it.replace(" ", "").replace("-", "") }
+        val intent = Intent(
+            Intent.ACTION_SENDTO,
+            Uri.parse("smsto:" + numbers.joinToString(","))
+        ).apply {
+            putExtra("sms_body", message)
+            putExtra(Intent.EXTRA_TEXT, message)
+        }
         try {
-            context.startActivity(intent)
+            context.startActivity(Intent.createChooser(intent, "Send complaint by SMS"))
+        } catch (e: ActivityNotFoundException) {
+            Log.e(TAG, "No SMS app", e)
+            toast(context, "No messaging app is installed on this phone.")
         } catch (e: Exception) {
-            Log.e(TAG, "No email app available", e)
+            Log.e(TAG, "SMS failed", e)
+            toast(context, "The messaging app could not be opened.")
         }
     }
 
-    private fun sendSms(context: Context, phones: List<String>, body: String) {
-        val uri = Uri.parse("smsto:" + phones.joinToString(","))
-        val intent = Intent(Intent.ACTION_SENDTO, uri).apply {
-            putExtra("sms_body", body.take(1400))
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    fun call(context: Context, phone: String) {
+        val cleaned = phone.replace(" ", "").replace("-", "")
+        if (cleaned.isBlank()) {
+            toast(context, "This office has no phone number saved.")
+            return
         }
         try {
-            context.startActivity(intent)
+            context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$cleaned")))
         } catch (e: Exception) {
-            Log.e(TAG, "SMS intent failed", e)
-            try {
-                context.startActivity(
-                    Intent(
-                        Intent.ACTION_VIEW,
-                        Uri.parse("sms:" + phones.joinToString(","))
-                    ).putExtra("sms_body", body.take(1400))
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                )
-            } catch (inner: Exception) {
-                Log.e(TAG, "No messaging app available", inner)
-            }
+            Log.e(TAG, "Dial failed", e)
+            toast(context, "The dialler could not be opened.")
         }
+    }
+
+    fun emailTo(context: Context, authority: Authority, report: Report) {
+        if (authority.email.isBlank()) {
+            toast(context, "This office has no email address saved.")
+            return
+        }
+        sendEmail(
+            context = context,
+            emails = listOf(authority.email.trim()),
+            subject = composeSubject(report),
+            message = composeMessage(report),
+            report = report
+        )
+    }
+
+    private fun toast(context: Context, text: String) {
+        Toast.makeText(context, text, Toast.LENGTH_LONG).show()
     }
 }
