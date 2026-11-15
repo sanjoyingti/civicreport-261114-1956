@@ -1,6 +1,7 @@
 package com.arin.civicreport.ui.components
 
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -25,12 +26,12 @@ fun StatusBadge(status: IncidentStatus) {
         IncidentStatus.Failed -> MaterialTheme.colorScheme.onError
         IncidentStatus.Draft -> MaterialTheme.colorScheme.onSecondaryContainer
     }
-    Surface(color = background, shape = MaterialTheme.shapes.small) {
+    Surface(color = background, shape = RoundedCornerShape(50)) {
         Text(
             text = status.name,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+            color = textColour,
             style = MaterialTheme.typography.labelSmall,
-            color = textColour
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
         )
     }
 }
