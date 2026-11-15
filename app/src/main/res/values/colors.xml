@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Single source of truth for the launcher icon background colour. -->
     <color name="ic_launcher_background">#206039</color>
     <color name="green_primary">#206039</color>
     <color name="white">#FFFFFF</color>

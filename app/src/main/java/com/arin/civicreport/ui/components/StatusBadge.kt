@@ -1,42 +1,54 @@
 package com.arin.civicreport.ui.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.arin.civicreport.model.IncidentStatus
 
-/** Small coloured pill showing the state of a report. */
+/** Small rounded label showing a report's status with theme-aware colours. */
 @Composable
 fun StatusBadge(status: IncidentStatus) {
-    val container = when (status) {
-        IncidentStatus.Sent -> MaterialTheme.colorScheme.primary
-        IncidentStatus.Pending -> Color(0xFFFFA600)
-        IncidentStatus.Failed -> MaterialTheme.colorScheme.error
-        IncidentStatus.Draft -> MaterialTheme.colorScheme.surfaceVariant
+    val colours = MaterialTheme.colorScheme
+    val label: String
+    val container: Color
+    val content: Color
+    when (status) {
+        IncidentStatus.Sent -> {
+            label = "Sent"
+            container = colours.primaryContainer
+            content = colours.onPrimaryContainer
+        }
+        IncidentStatus.Pending -> {
+            label = "Pending"
+            container = colours.secondaryContainer
+            content = colours.onSecondaryContainer
+        }
+        IncidentStatus.Failed -> {
+            label = "Failed"
+            container = colours.errorContainer
+            content = colours.onErrorContainer
+        }
+        IncidentStatus.Draft -> {
+            label = "Draft"
+            container = colours.surfaceVariant
+            content = colours.onSurfaceVariant
+        }
     }
-    val onContainer = when (status) {
-        IncidentStatus.Sent -> MaterialTheme.colorScheme.onPrimary
-        IncidentStatus.Pending -> Color(0xFF3B2A00)
-        IncidentStatus.Failed -> MaterialTheme.colorScheme.onError
-        IncidentStatus.Draft -> MaterialTheme.colorScheme.onSurfaceVariant
-    }
-    Surface(
-        color = container,
-        contentColor = onContainer,
-        shape = RoundedCornerShape(50)
-    ) {
-        Text(
-            text = status.name,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Bold
-        )
-    }
+    Text(
+        text = label,
+        modifier = Modifier
+            .background(container, RoundedCornerShape(50))
+            .padding(horizontal = 10.dp, vertical = 4.dp),
+        color = content,
+        fontWeight = FontWeight.Bold,
+        fontSize = 11.sp
+    )
 }
