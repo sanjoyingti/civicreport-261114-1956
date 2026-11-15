@@ -21,15 +21,15 @@ fun StatusBadge(status: IncidentStatus) {
         IncidentStatus.Failed -> MaterialTheme.colorScheme.error
         IncidentStatus.Draft -> MaterialTheme.colorScheme.surfaceVariant
     }
-    val content = when (status) {
+    val onContainer = when (status) {
         IncidentStatus.Sent -> MaterialTheme.colorScheme.onPrimary
-        IncidentStatus.Pending -> Color(0xFF3A2600)
+        IncidentStatus.Pending -> Color(0xFF3B2A00)
         IncidentStatus.Failed -> MaterialTheme.colorScheme.onError
         IncidentStatus.Draft -> MaterialTheme.colorScheme.onSurfaceVariant
     }
     Surface(
         color = container,
-        contentColor = content,
+        contentColor = onContainer,
         shape = RoundedCornerShape(50)
     ) {
         Text(

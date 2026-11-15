@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">DuarBagori Reports</string>
-    <string name="file_provider_authority">com.arin.civicreport.fileprovider</string>
+    <string name="report_incident">Report Incident</string>
+    <string name="no_reports_yet">No reports yet</string>
 </resources>

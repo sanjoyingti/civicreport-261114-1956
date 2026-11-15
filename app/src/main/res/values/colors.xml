@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="window_background">#FBFDF7</color>
-    <color name="app_green">#206039</color>
+    <color name="ic_launcher_background">#206039</color>
+    <color name="green_primary">#206039</color>
+    <color name="white">#FFFFFF</color>
 </resources>
