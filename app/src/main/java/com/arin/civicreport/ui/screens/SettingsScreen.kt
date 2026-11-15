@@ -1,4 +1,3 @@
-=== ABOUT: The settings screen, fixed to use the shared permission helper instead of a parameter that was never passed ===
 package com.arin.civicreport.ui.screens
 
 import android.Manifest
@@ -136,11 +135,23 @@ fun SettingsScreen(
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    PermissionButton("Request camera", permissionManager, Manifest.permission.CAMERA)
-                    PermissionButton("Request location", permissionManager, Manifest.permission.ACCESS_FINE_LOCATION)
+                    PermissionButton(
+                        "Request camera",
+                        permissionManager,
+                        Manifest.permission.CAMERA
+                    )
+                    PermissionButton(
+                        "Request location",
+                        permissionManager,
+                        Manifest.permission.ACCESS_FINE_LOCATION
+                    )
                     PermissionButton("Request SMS", permissionManager, Manifest.permission.SEND_SMS)
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        PermissionButton("Request notifications", permissionManager, Manifest.permission.POST_NOTIFICATIONS)
+                        PermissionButton(
+                            "Request notifications",
+                            permissionManager,
+                            Manifest.permission.POST_NOTIFICATIONS
+                        )
                     }
                 }
             }
@@ -244,7 +255,10 @@ fun SettingsScreen(
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
-                    Text("DuarBagori Reports • version 1.0.0", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        "DuarBagori Reports • version 1.0.0",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
                     Text(
                         "Everything you file stays on this device. Contacts can be edited above.",
                         style = MaterialTheme.typography.bodyMedium,
@@ -252,7 +266,9 @@ fun SettingsScreen(
                     )
                     TextButton(onClick = {
                         try {
-                            context.startActivity(Intent(android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS))
+                            context.startActivity(
+                                Intent(android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS)
+                            )
                         } catch (e: Exception) {
                             notice = "System location settings could not be opened."
                         }

@@ -1,4 +1,3 @@
-=== ABOUT: The map of screens, fixed so each screen is opened with exactly the settings it expects ===
 package com.arin.civicreport.ui.navigation
 
 import androidx.compose.runtime.Composable
