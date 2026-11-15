@@ -8,6 +8,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.arin.civicreport.model.IncidentStatus
 
@@ -20,21 +21,22 @@ fun StatusBadge(status: IncidentStatus) {
         IncidentStatus.Failed -> MaterialTheme.colorScheme.error
         IncidentStatus.Draft -> MaterialTheme.colorScheme.secondaryContainer
     }
-    val content = when (status) {
+    val onContainer = when (status) {
         IncidentStatus.Sent -> MaterialTheme.colorScheme.onPrimary
-        IncidentStatus.Pending -> Color(0xFF301F00)
+        IncidentStatus.Pending -> Color(0xFF1B1B1B)
         IncidentStatus.Failed -> MaterialTheme.colorScheme.onError
         IncidentStatus.Draft -> MaterialTheme.colorScheme.onSecondaryContainer
     }
     Surface(
         color = container,
-        contentColor = content,
         shape = RoundedCornerShape(50)
     ) {
         Text(
             text = status.name,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-            style = MaterialTheme.typography.labelSmall
+            color = onContainer,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
         )
     }
 }
