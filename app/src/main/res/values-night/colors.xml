@@ -1,7 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="white">#FFFFFFFF</color>
+    <color name="primary">#FFA8D7A8</color>
+    <color name="on_primary">#FF123E23</color>
+    <color name="primary_container">#FF2A4231</color>
+    <color name="on_primary_container">#FFC8E6C9</color>
+    <color name="secondary">#FFB4CCB7</color>
+    <color name="on_secondary">#FF203527</color>
+    <color name="secondary_container">#FF2A4231</color>
+    <color name="on_secondary_container">#FFD7F0D8</color>
+    <color name="accent">#FFD0BCFF</color>
+    <color name="background">#FF1A1C18</color>
+    <color name="on_background">#FFE3E3DC</color>
+    <color name="surface">#FF1A1C18</color>
+    <color name="on_surface">#FFE3E3DC</color>
+    <color name="surface_variant">#FF3B444E</color>
+    <color name="on_surface_variant">#FFC3C8BC</color>
+    <color name="outline">#FF8D9387</color>
+    <color name="error">#FFF2D0C5</color>
+    <color name="on_error">#FF561E14</color>
+    <color name="error_container">#FF73342A</color>
+    <color name="on_error_container">#FFF2D0C5</color>
     <color name="black">#FF000000</color>
-    <color name="window_background">#FF1A1C18</color>
-    <color name="brand_green">#FFA8D7A8</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="transparent">#00000000</color>
 </resources>
