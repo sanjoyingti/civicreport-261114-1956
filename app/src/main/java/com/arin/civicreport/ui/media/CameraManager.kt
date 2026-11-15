@@ -49,7 +49,7 @@ class CameraManager(private val context: Context) {
                 provider = cameraProvider
 
                 val preview = Preview.Builder().build()
-                preview.surfaceProvider = previewView.surfaceProvider
+                preview.setSurfaceProvider(previewView.surfaceProvider)
 
                 val capture = ImageCapture.Builder()
                     .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
@@ -142,9 +142,9 @@ class CameraManager(private val context: Context) {
     }
 
     private fun newFile(extension: String): File {
-        val dir = File(context.getExternalFilesDir("media") ?: File(context.filesDir, "media").also { it.mkdirs() }, "")
-        dir.mkdirs()
+        val base = context.getExternalFilesDir("media") ?: File(context.filesDir, "media").also { it.mkdirs() }
+        base.mkdirs()
         val stamp = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US).format(Date())
-        return File(dir, "report_$stamp.$extension")
+        return File(base, "report_$stamp.$extension")
     }
 }

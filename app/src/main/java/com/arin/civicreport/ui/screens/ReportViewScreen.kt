@@ -1,4 +1,3 @@
-=== ABOUT: The report detail screen, rewritten so its parameters match how the app opens it and every import exists ===
 package com.arin.civicreport.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
@@ -10,6 +9,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
@@ -42,13 +43,17 @@ import androidx.compose.ui.unit.dp
 import com.arin.civicreport.data.Repository
 import com.arin.civicreport.model.Authority
 import com.arin.civicreport.model.IncidentType
-import com.arin.civicreport.model.Report
 import com.arin.civicreport.ui.components.StatusBadge
-import com.arin.civicreport.ui.components.formatDate
 import com.arin.civicreport.ui.util.PermissionManager
 import com.arin.civicreport.ui.util.Prefs
 import com.arin.civicreport.ui.util.ReportSender
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+private fun formatWhen(timestamp: Long): String =
+    SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault()).format(Date(timestamp))
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -69,16 +74,17 @@ fun ReportViewScreen(
     var showDeleteDialog by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(reportId) {
+    LaunchedEffect(reportId, reports.size) {
+        val current = report ?: return@LaunchedEffect
         val loaded = mutableListOf<Authority>()
-        report?.sentAuthorities?.forEach { id ->
+        current.sentAuthorities.forEach { id ->
             repo.getAuthority(id)?.let { loaded.add(it) }
         }
-        if (loaded.isEmpty() && report != null) {
-            report.incidentTypes.forEach { tag ->
-                repo.getAuthoritiesForIncident(tag, report.state, report.city.lowercase())
+        if (loaded.isEmpty()) {
+            current.incidentTypes.forEach { tag ->
+                repo.getAuthoritiesForIncident(tag, current.state, current.city.lowercase(Locale.US))
                     .forEach { candidate ->
-                        if (report.sentAuthorities.contains(candidate.id)) loaded.add(candidate)
+                        if (current.sentAuthorities.contains(candidate.id)) loaded.add(candidate)
                     }
             }
         }
@@ -100,7 +106,8 @@ fun ReportViewScreen(
             }
         )
     }) { padding ->
-        if (report == null) {
+        val current = report
+        if (current == null) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -121,6 +128,7 @@ fun ReportViewScreen(
                 .fillMaxSize()
                 .padding(padding)
                 .padding(16.dp)
+                .verticalScroll(rememberScrollState())
         ) {
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -130,23 +138,23 @@ fun ReportViewScreen(
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     Text(
-                        report.incidentTypes.joinToString(", ") { IncidentType.titleFor(it) },
+                        current.incidentTypes.joinToString(", ") { IncidentType.titleFor(it) },
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        report.address.ifBlank { "Location unknown" },
+                        current.address.ifBlank { "Location unknown" },
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Text("Filed: ${formatDate(report.timestamp)}", style = MaterialTheme.typography.bodySmall)
+                    Text("Filed: ${formatWhen(current.timestamp)}", style = MaterialTheme.typography.bodySmall)
                     Text(
-                        "GPS: ${"%.6f".format(report.latitude)}, ${"%.6f".format(report.longitude)}",
+                        "GPS: ${"%.6f".format(current.latitude)}, ${"%.6f".format(current.longitude)}",
                         style = MaterialTheme.typography.bodySmall
                     )
-                    Text("Media: ${report.mediaType}", style = MaterialTheme.typography.bodySmall)
-                    if (report.description.isNotBlank()) {
-                        Text("Notes: ${report.description}", style = MaterialTheme.typography.bodyMedium)
+                    Text("Media: ${current.mediaType}", style = MaterialTheme.typography.bodySmall)
+                    if (current.description.isNotBlank()) {
+                        Text("Notes: ${current.description}", style = MaterialTheme.typography.bodyMedium)
                     }
                 }
             }
@@ -156,14 +164,14 @@ fun ReportViewScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                StatusBadge(report.status)
-                Text("Method: ${report.sendMethod}", style = MaterialTheme.typography.bodySmall)
+                StatusBadge(current.status)
+                Text("Method: ${current.sendMethod}", style = MaterialTheme.typography.bodySmall)
             }
             Spacer(modifier = Modifier.height(12.dp))
             Text("Notified offices", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             if (authorities.isEmpty()) {
                 Text(
-                    report.sentAuthorities.joinToString(", ").ifBlank { "None recorded" },
+                    current.sentAuthorities.joinToString(", ").ifBlank { "None recorded" },
                     style = MaterialTheme.typography.bodyMedium
                 )
             } else {
@@ -186,10 +194,10 @@ fun ReportViewScreen(
                         notice = "No saved contacts for this report, so nothing could be resent."
                     } else {
                         permissionManager.requestNotificationsPermission()
-                        ReportSender.send(context, targets, report, report.sendMethod)
+                        ReportSender.send(context, targets, current, current.sendMethod)
                         notice = "Complaint re-opened in email/SMS for the same offices."
                         scope.launch {
-                            repo.updateStatus(report.id, report.status)
+                            repo.updateStatus(current.id, current.status)
                         }
                     }
                 }

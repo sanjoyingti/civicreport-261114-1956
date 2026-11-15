@@ -47,8 +47,13 @@ import com.arin.civicreport.data.Repository
 import com.arin.civicreport.model.IncidentType
 import com.arin.civicreport.model.Report
 import com.arin.civicreport.ui.components.StatusBadge
-import com.arin.civicreport.ui.components.formatDate
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+private fun formatWhen(timestamp: Long): String =
+    SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault()).format(Date(timestamp))
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -155,7 +160,7 @@ private fun ReportCard(report: Report, onClick: () -> Unit, onDelete: () -> Unit
                 fontSize = 15.sp
             )
             Text(
-                "${report.address.ifBlank { "Location unknown" }} • ${formatDate(report.timestamp)}",
+                "${report.address.ifBlank { "Location unknown" }} • ${formatWhen(report.timestamp)}",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

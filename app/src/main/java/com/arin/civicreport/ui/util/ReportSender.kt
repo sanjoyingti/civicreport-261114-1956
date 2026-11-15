@@ -1,11 +1,9 @@
-=== ABOUT: New helper that writes the complaint text and hands it to the phone's email or message app, addressed to the chosen officials ===
 package com.arin.civicreport.ui.util
 
-import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.widget.Toast
+import android.util.Log
 import com.arin.civicreport.model.Authority
 import com.arin.civicreport.model.IncidentType
 import com.arin.civicreport.model.Report
@@ -13,57 +11,74 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-/** Builds the complaint text and opens the phone's email / SMS app with all recipients filled in. */
+/**
+ * Builds the complaint text and hands it to the phone's own email app / messaging app.
+ * The app itself never talks to a server, so no account or backend is needed.
+ */
 object ReportSender {
 
-    fun buildBody(report: Report, authorities: List<Authority>): String {
-        val stamp = SimpleDateFormat("d MMM yyyy, HH:mm", Locale.getDefault()).format(Date(report.timestamp))
+    private const val TAG = "ReportSender"
+
+    fun subject(report: Report): String =
+        "Complaint: " + report.incidentTypes.joinToString(", ") { IncidentType.titleFor(it) }
+
+    fun body(report: Report): String {
+        val stamp = SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault()).format(Date(report.timestamp))
+        val mapLink = "https://www.openstreetmap.org/?mlat=${report.latitude}&mlon=${report.longitude}#map=18/${report.latitude}/${report.longitude}"
         return buildString {
-            appendLine("CIVIC INCIDENT REPORT")
+            appendLine("Respected Sir/Madam,")
             appendLine()
-            appendLine("To:")
-            authorities.forEach { appendLine(" - ${it.name} (${it.level})") }
+            appendLine("I wish to report the following civic issue:")
             appendLine()
-            appendLine("Incident type(s): ${report.incidentTypes.joinToString(", ") { IncidentType.titleFor(it) }}")
+            appendLine("Issue type: " + report.incidentTypes.joinToString(", ") { IncidentType.titleFor(it) })
             appendLine("Reported on: $stamp")
-            appendLine("Address: ${report.address.ifBlank { "not available" }}")
-            if (report.district.isNotBlank() || report.state.isNotBlank()) {
-                appendLine("District: ${report.district}  State: ${report.state}  PIN: ${report.pincode}")
+            appendLine("Address: " + report.address.ifBlank { "not available" })
+            if (report.city.isNotBlank() || report.state.isNotBlank()) {
+                appendLine("Area: ${report.city} ${report.district} ${report.state} ${report.pincode}".trim())
             }
-            appendLine("GPS coordinates: ${"%.6f".format(report.latitude)}, ${"%.6f".format(report.longitude)}")
-            appendLine("Map link: https://www.openstreetmap.org/?mlat=${"%.6f".format(report.latitude)}&mlon=${"%.6f".format(report.longitude)}#map=18/${"%.6f".format(report.latitude)}/${"%.6f".format(report.longitude)}")
+            appendLine("GPS: ${report.latitude}, ${report.longitude}")
+            appendLine("Map: $mapLink")
+            if (report.description.isNotBlank()) {
+                appendLine()
+                appendLine("Details: " + report.description)
+            }
             appendLine()
-            appendLine("Details: ${report.description.ifBlank { "no extra description provided" }}")
+            appendLine("Photograph / video evidence is attached where possible.")
+            appendLine("Requesting early inspection and action.")
             appendLine()
-            append("Kindly inspect the site and take necessary action. The photo/video proof captured at the exact spot is attached. ")
-            append("Report reference: #${report.id}")
+            appendLine("Regards,")
+            appendLine("Citizen report filed with DuarBagori Reports")
         }
     }
 
     fun send(context: Context, authorities: List<Authority>, report: Report, method: String) {
-        val emails = authorities.map { it.email }.filter { it.isNotBlank() }.distinct()
-        val phones = authorities.map { it.phone }.filter { it.isNotBlank() }.distinct()
-        val body = buildBody(report, authorities)
-        val media = report.mediaUris.firstOrNull()
+        val emails = authorities.map { it.email.trim() }.filter { it.contains("@") }.distinct()
+        val phones = authorities.map { it.phone.trim() }.filter { it.isNotBlank() }.distinct()
+        val subject = subject(report)
+        val body = body(report)
 
-        if (method != "sms" && emails.isNotEmpty()) {
-            sendEmail(context, emails, report, body, media)
+        if (method == "email" || method == "both") {
+            if (emails.isNotEmpty()) sendEmail(context, emails, subject, body, report)
         }
-        if (method != "email" && phones.isNotEmpty()) {
-            sendSms(context, phones, body)
+        if (method == "sms" || method == "both") {
+            if (phones.isNotEmpty()) sendSms(context, phones, body)
         }
     }
 
     private fun sendEmail(
         context: Context,
         emails: List<String>,
-        report: Report,
+        subject: String,
         body: String,
-        media: String?
+        report: Report
     ) {
-        val subject = "Civic complaint: ${report.incidentTypes.joinToString(", ") { IncidentType.titleFor(it) }} at ${report.address.ifBlank { "reported location" }}"
+        val media = report.mediaUris.firstOrNull { it.isNotBlank() }
         val intent = Intent(Intent.ACTION_SEND).apply {
-            type = "message/rfc822"
+            type = when {
+                media == null -> "text/plain"
+                report.mediaType == "video" -> "video/mp4"
+                else -> "image/jpeg"
+            }
             putExtra(Intent.EXTRA_EMAIL, emails.toTypedArray())
             putExtra(Intent.EXTRA_SUBJECT, subject)
             putExtra(Intent.EXTRA_TEXT, body)
@@ -73,25 +88,46 @@ object ReportSender {
             }
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
-        launch(context, intent, "No email app found. Install one to send by email.")
+        try {
+            context.startActivity(Intent.createChooser(intent, "Send complaint by email"))
+        } catch (e: Exception) {
+            Log.e(TAG, "Email intent failed", e)
+            sendMailTo(context, emails, subject, body)
+        }
+    }
+
+    private fun sendMailTo(context: Context, emails: List<String>, subject: String, body: String) {
+        val uri = Uri.parse("mailto:" + emails.joinToString(",") + "?subject=" +
+            Uri.encode(subject) + "&body=" + Uri.encode(body))
+        val intent = Intent(Intent.ACTION_SENDTO, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        try {
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            Log.e(TAG, "No email app available", e)
+        }
     }
 
     private fun sendSms(context: Context, phones: List<String>, body: String) {
-        val intent = Intent(Intent.ACTION_SENDTO).apply {
-            data = Uri.parse("smsto:" + phones.joinToString(","))
-            putExtra(Intent.EXTRA_TEXT, body)
+        val uri = Uri.parse("smsto:" + phones.joinToString(","))
+        val intent = Intent(Intent.ACTION_SENDTO, uri).apply {
+            putExtra("sms_body", body.take(1400))
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
-        launch(context, intent, "No SMS app found. Install one to send by SMS.")
-    }
-
-    private fun launch(context: Context, intent: Intent, errorMessage: String) {
         try {
-            context.startActivity(Intent.createChooser(intent, "Send report").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        } catch (e: ActivityNotFoundException) {
-            Toast.makeText(context, errorMessage, Toast.LENGTH_LONG).show()
+            context.startActivity(intent)
         } catch (e: Exception) {
-            Toast.makeText(context, errorMessage, Toast.LENGTH_LONG).show()
+            Log.e(TAG, "SMS intent failed", e)
+            try {
+                context.startActivity(
+                    Intent(
+                        Intent.ACTION_VIEW,
+                        Uri.parse("sms:" + phones.joinToString(","))
+                    ).putExtra("sms_body", body.take(1400))
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+            } catch (inner: Exception) {
+                Log.e(TAG, "No messaging app available", inner)
+            }
         }
     }
 }

@@ -9,9 +9,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.arin.civicreport.model.IncidentStatus
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 @Composable
 fun StatusBadge(status: IncidentStatus) {
@@ -22,18 +19,17 @@ fun StatusBadge(status: IncidentStatus) {
         IncidentStatus.Draft -> MaterialTheme.colorScheme.secondaryContainer
     }
     val textColour = when (status) {
-        IncidentStatus.Sent, IncidentStatus.Failed -> Color.White
-        else -> MaterialTheme.colorScheme.onSecondaryContainer
+        IncidentStatus.Sent -> MaterialTheme.colorScheme.onPrimary
+        IncidentStatus.Pending -> Color(0xFF2B1B00)
+        IncidentStatus.Failed -> MaterialTheme.colorScheme.onError
+        IncidentStatus.Draft -> MaterialTheme.colorScheme.onSecondaryContainer
     }
     Surface(color = background, shape = MaterialTheme.shapes.small) {
         Text(
-            status.name,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            text = status.name,
+            color = textColour,
             style = MaterialTheme.typography.labelSmall,
-            color = textColour
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
         )
     }
 }
-
-fun formatDate(epochMs: Long): String =
-    SimpleDateFormat("d MMM yyyy, HH:mm", Locale.getDefault()).format(Date(epochMs))
