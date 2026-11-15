@@ -1,7 +1,15 @@
 package com.arin.civicreport.ui.screens
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -9,34 +17,50 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.arin.civicreport.data.Repository
-import com.arin.civicreport.model.IncidentStatus
+import com.arin.civicreport.model.IncidentType
 import com.arin.civicreport.model.Report
-import com.arin.civicreport.ui.util.Prefs
+import com.arin.civicreport.ui.components.StatusBadge
+import com.arin.civicreport.ui.components.formatDate
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     repo: Repository,
-    prefs: Prefs,
     onOpenSettings: () -> Unit,
     onReportNew: () -> Unit,
     onOpenReport: (Long) -> Unit
 ) {
-    val context = LocalContext.current
     val reports by repo.getReports().collectAsState(initial = emptyList())
-    var deleteTarget by remember { mutableStateOf<Long?>(null) }
     val scope = rememberCoroutineScope()
+    var deleteTarget by remember { mutableStateOf<Long?>(null) }
 
     Scaffold(
         topBar = {
@@ -44,7 +68,7 @@ fun HomeScreen(
                 title = { Text("DuarBagori Reports", fontWeight = FontWeight.Bold) },
                 actions = {
                     IconButton(onClick = onOpenSettings) {
-                        Icon(Icons.Default.Settings, contentDescription = "Settings")
+                        Icon(Icons.Filled.Settings, contentDescription = "Settings")
                     }
                 }
             )
@@ -52,7 +76,7 @@ fun HomeScreen(
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = onReportNew,
-                icon = { Icon(Icons.Default.Add, contentDescription = null) },
+                icon = { Icon(Icons.Filled.Add, contentDescription = null) },
                 text = { Text("Report Incident") }
             )
         }
@@ -69,7 +93,7 @@ fun HomeScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(modifier = Modifier.height(12.dp))
-            Text("Recent Reports", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text("Recent reports", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(8.dp))
             if (reports.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -118,7 +142,6 @@ fun HomeScreen(
 @Composable
 private fun ReportCard(report: Report, onClick: () -> Unit, onDelete: () -> Unit) {
     var menuOpen by remember { mutableStateOf(false) }
-
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -127,7 +150,7 @@ private fun ReportCard(report: Report, onClick: () -> Unit, onDelete: () -> Unit
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Text(
-                report.incidentTypes.joinToString(", ") { it.replace("_", " ") },
+                report.incidentTypes.joinToString(", ") { IncidentType.titleFor(it) },
                 fontWeight = FontWeight.Bold,
                 fontSize = 15.sp
             )
@@ -145,7 +168,7 @@ private fun ReportCard(report: Report, onClick: () -> Unit, onDelete: () -> Unit
                 StatusBadge(report.status)
                 Box {
                     IconButton(onClick = { menuOpen = true }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = "Report options")
+                        Icon(Icons.Filled.MoreVert, contentDescription = "Report options")
                     }
                     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                         DropdownMenuItem(
@@ -154,7 +177,7 @@ private fun ReportCard(report: Report, onClick: () -> Unit, onDelete: () -> Unit
                         )
                         DropdownMenuItem(
                             text = { Text("Delete") },
-                            leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
+                            leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null) },
                             onClick = { menuOpen = false; onDelete() }
                         )
                     }
@@ -163,29 +186,3 @@ private fun ReportCard(report: Report, onClick: () -> Unit, onDelete: () -> Unit
         }
     }
 }
-
-@Composable
-fun StatusBadge(status: IncidentStatus) {
-    val colour = when (status) {
-        IncidentStatus.Sent -> MaterialTheme.colorScheme.primary
-        IncidentStatus.Pending -> Color(0xFFFFA600)
-        IncidentStatus.Failed -> MaterialTheme.colorScheme.error
-        IncidentStatus.Draft -> MaterialTheme.colorScheme.secondaryContainer
-    }
-    val textColour = when (status) {
-        IncidentStatus.Sent, IncidentStatus.Failed -> Color.White
-        else -> MaterialTheme.colorScheme.onSecondaryContainer
-    }
-    Surface(color = colour, shape = MaterialTheme.shapes.small) {
-        Text(
-            status.name,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-            style = MaterialTheme.typography.labelSmall,
-            color = textColour
-        )
-    }
-}
-
-internal fun formatDate(epochMs: Long): String =
-    java.text.SimpleDateFormat("d MMM yyyy, HH:mm", java.util.Locale.getDefault())
-        .format(java.util.Date(epochMs))

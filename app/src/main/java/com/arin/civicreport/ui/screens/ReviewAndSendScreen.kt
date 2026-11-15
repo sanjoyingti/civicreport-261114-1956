@@ -1,199 +1,237 @@
 package com.arin.civicreport.ui.screens
 
-import android.content.Intent
-import android.net.Uri
-import android.os.Build
-import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.arin.civicreport.data.Repository
 import com.arin.civicreport.model.IncidentStatus
+import com.arin.civicreport.model.IncidentType
+import com.arin.civicreport.model.Report
+import com.arin.civicreport.ui.screens.report.ReportFlowViewModel
 import com.arin.civicreport.ui.util.NetworkChecker
+import com.arin.civicreport.ui.util.Prefs
+import com.arin.civicreport.ui.util.ReportSender
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReviewAndSendScreen(
-    incidentTypes: List<String>,
-    mediaUri: String?,
-    mediaType: String,
-    latitude: Double,
-    longitude: Double,
-    address: String,
-    authorities: List<com.arin.civicreport.model.Authority>,
-    sendMethod: String,
+    repo: Repository,
+    prefs: Prefs,
+    reportViewModel: ReportFlowViewModel,
     onBack: () -> Unit,
-    onSaveAndSend: (List<String>, String) -> Unit
+    onSent: (Long) -> Unit
 ) {
     val context = LocalContext.current
-    var selected by remember { mutableStateOf(authorities.map { it.id }) }
-    var method by remember { mutableStateOf(sendMethod) }
+    val scope = rememberCoroutineScope()
+    val draft by reportViewModel.draft.collectAsState()
+    var method by remember { mutableStateOf(prefs.defaultSendMethod) }
     var sending by remember { mutableStateOf(false) }
-    var networkOK by remember { mutableStateOf(false) }
-    var showOfflineDialog by remember { mutableStateOf(false) }
-    var showSendingComplete by remember { mutableStateOf(false) }
+    var online by remember { mutableStateOf(true) }
 
     LaunchedEffect(Unit) {
-        networkOK = NetworkChecker.isOnline(context)
+        online = NetworkChecker.isOnline(context)
     }
 
-    fun buildBody(): String {
-        return buildString {
-            append("Civic Incident Report\n\n")
-            append("Types: ${incidentTypes.joinToString(", ")}\n")
-            append("Location: ${address.ifBlank { "unknown" }}\n")
-            append("Latitude: ${"%.6f".format(latitude)}\n")
-            append("Longitude: ${"%.6f".format(longitude)}\n")
-            append("Media: $mediaUri ($mediaType)\n")
-        }
-    }
-
-    fun sendToAuthority(ctx: Context, a: com.arin.civicreport.model.Authority, method: String, body: String, mediaUri: String?) {
-        val subject = "Civic Incident Report: ${incidentTypes.firstOrNull() ?: "Incident"} at $address"
-        if (method in listOf("email", "both") && a.email.isNotBlank()) {
-            val mail = Intent(Intent.ACTION_SENDTO).apply {
-                data = android.net.Uri.parse("mailto:${a.email}")
-                putExtra(Intent.EXTRA_SUBJECT, subject)
-                putExtra(Intent.EXTRA_TEXT, body)
-                mediaUri?.let {
-                    putExtra(Intent.EXTRA_STREAM, Uri.parse(it))
-                    addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }
-            }
-            try { ctx.startActivity(mail) } catch (e: Exception) {
-                android.app.AlertDialog.Builder(ctx)
-                    .setTitle("No email app")
-                    .setMessage("Install an email app to send by email.")
-                    .setPositiveButton("OK") { _, _ -> }
-                    .show()
-            }
-        }
-        if (method in listOf("sms", "both") && a.phone.isNotBlank()) {
-            val sms = Intent(Intent.ACTION_SENDTO).apply {
-                data = android.net.Uri.parse("smsto:${a.phone}")
-                putExtra(Intent.EXTRA_TEXT, body)
-            }
-            try { ctx.startActivity(sms) } catch (e: Exception) {
-                android.app.AlertDialog.Builder(ctx)
-                    .setTitle("No SMS app")
-                    .setMessage("Install an SMS app to send by SMS.")
-                    .setPositiveButton("OK") { _, _ -> }
-                    .show()
-            }
-        }
-    }
+    val chosen = draft.authorities.filter { draft.selectedAuthorityIds.contains(it.id) }
 
     Scaffold(topBar = {
         TopAppBar(
-            title = { Text("Review and Send", fontWeight = FontWeight.Bold) },
-            navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, contentDescription = "Back") } }
+            title = { Text("Review and send", fontWeight = FontWeight.Bold) },
+            navigationIcon = {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
+                }
+            }
         )
     }) { padding ->
-        Column(modifier = Modifier
-            .fillMaxSize()
-            .padding(padding)
-            .padding(16.dp)) {
-            Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text("Incident types: ${incidentTypes.joinToString(", ")}", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
-                    Text("Location: ${address.ifBlank { "unknown" }}", style = MaterialTheme.typography.bodyMedium)
-                    Text("Lat/Lon: ${"%.6f".format(latitude)} / ${"%.6f".format(longitude)}", style = MaterialTheme.typography.bodyMedium)
-                    Text("Media: $mediaUri ($mediaType)", style = MaterialTheme.typography.bodyMedium)
-                }
-            }
-            Spacer(modifier = Modifier.height(12.dp))
-            Text("Selected authorities (${selected.size})", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            LazyColumn {
-                items(selected.map { id -> authorities.find { a -> a.id == id }!! }) { a ->
-                    AuthorityRow(a = a, onDeselect = { selected = selected - a.id })
-                }
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-            Text("Contact method", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SendMethodChip(method == "email", "Email") { method = "email" }
-                SendMethodChip(method == "sms", "SMS") { method = "sms" }
-                SendMethodChip(method == "both", "Both") { method = "both" }
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-            if (!networkOK) {
-                OutlinedTextField(
-                    value = "You are offline. The report will be saved as a draft and the compose screens will open so you can send manually when you are online.",
-                    onValueChange = {},
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = TextFieldDefaults.outlinedTextFieldColors(
-                        backgroundColor = MaterialTheme.colorScheme.errorContainer,
-                        focusedBorderColor = MaterialTheme.colorScheme.error,
-                        unfocusedBorderColor = MaterialTheme.colorScheme.error
-                    ),
-                    readOnly = true
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState())
+        ) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
                 )
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(
+                        draft.incidentTypes.joinToString(", ") { IncidentType.titleFor(it) },
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text("Location: ${draft.address.ifBlank { "unknown" }}")
+                    Text(
+                        "Lat/Lon: ${"%.6f".format(draft.latitude)} / ${"%.6f".format(draft.longitude)}"
+                    )
+                    Text("Media: ${draft.mediaUri ?: "none"} (${draft.mediaType})")
+                    if (draft.description.isNotBlank()) {
+                        Text("Notes: ${draft.description}")
+                    }
+                }
             }
+
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                "Officials to notify (${chosen.size})",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            LazyColumn(modifier = Modifier.height(180.dp)) {
+                items(chosen) { authority ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
+                    ) {
+                        Row(modifier = Modifier.padding(12.dp)) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(authority.name, fontWeight = FontWeight.Bold)
+                                Text(
+                                    "Level: ${authority.level}  ${authority.email}  ${authority.phone}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            IconButton(onClick = { reportViewModel.toggleAuthority(authority.id) }) {
+                                Icon(
+                                    Icons.Filled.Close,
+                                    contentDescription = "Remove",
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+            Text("Contact method", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                MethodChip(method == "email", "Email") { method = "email"; prefs.defaultSendMethod = "email" }
+                MethodChip(method == "sms", "SMS") { method = "sms"; prefs.defaultSendMethod = "sms" }
+                MethodChip(method == "both", "Both") { method = "both"; prefs.defaultSendMethod = "both" }
+            }
+
+            if (!online) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer
+                    )
+                ) {
+                    Text(
+                        "You look offline. The report is saved anyway and the compose screens open so you can send it later.",
+                        modifier = Modifier.padding(12.dp),
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
             Button(
                 onClick = {
+                    if (chosen.isEmpty() || sending) return@Button
                     sending = true
-                    authorities.filter { selected.contains(it.id) }.forEach { a ->
-                        sendToAuthority(context, a, method, buildBody(), mediaUri)
+                    scope.launch {
+                        val now = System.currentTimeMillis()
+                        val report = Report(
+                            incidentTypes = draft.incidentTypes,
+                            mediaUris = listOfNotNull(draft.mediaUri),
+                            mediaType = draft.mediaType,
+                            timestamp = now,
+                            latitude = draft.latitude,
+                            longitude = draft.longitude,
+                            address = draft.address,
+                            city = draft.city,
+                            district = draft.district,
+                            state = draft.state,
+                            pincode = draft.pincode,
+                            description = draft.description,
+                            status = IncidentStatus.Sent,
+                            sentAuthorities = chosen.map { it.id },
+                            lastUpdated = now,
+                            sendMethod = method
+                        )
+                        val id = repo.saveReport(report)
+                        ReportSender.send(context, chosen, report, method)
+                        sending = false
+                        onSent(id)
                     }
-                    onSaveAndSend(selected.sorted(), method)
-                    sending = false
-                    showSendingComplete = true
                 },
                 modifier = Modifier.fillMaxWidth(),
-                enabled = !sending && selected.isNotEmpty()
+                enabled = chosen.isNotEmpty() && !sending
             ) {
-                Text(if (sending) "Sending..." else "Send All")
+                Text(if (sending) "Sending..." else "Save and send to ${chosen.size} official(s)")
             }
         }
-    }
-
-    if (showSendingComplete) {
-        AlertDialog(
-            onDismissRequest = { showSendingComplete = false },
-            title = { Text("Reports opened") },
-            text = { Text("Compose screens have opened for each authority. Press the system Back button to return here when done.") },
-            confirmButton = {
-                TextButton(onClick = { showSendingComplete = false }) { Text("OK") }
-            }
-        )
     }
 }
 
 @Composable
-private fun AuthorityRow(a: com.arin.civicreport.model.Authority, onDeselect: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(a.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
-                Text("Level: ${a.level}  Phone: ${a.phone}  Email: ${a.email}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            IconButton(onClick = onDeselect) {
-                Icon(Icons.Default.Close, contentDescription = "Deselect", tint = MaterialTheme.colorScheme.error)
-            }
-        }
-    }
-}
-
-private fun SendMethodChip(selected: Boolean, label: String, onClick: () -> Unit) {
+private fun MethodChip(selected: Boolean, label: String, onClick: () -> Unit) {
     Card(
         modifier = Modifier
-            .weight(1f)
             .clickable(onClick = onClick)
-            .border(2.dp, if (selected) MaterialTheme.colorScheme.primary else Color.Transparent, RoundedCornerShape(10.dp)),
-        colors = CardDefaults.cardColors(containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant)
+            .border(
+                width = 2.dp,
+                color = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                shape = RoundedCornerShape(10.dp)
+            ),
+        colors = CardDefaults.cardColors(
+            containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer
+            else MaterialTheme.colorScheme.surfaceVariant
+        )
     ) {
-        Text(label, modifier = Modifier.padding(12.dp), fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
+        Text(
+            label,
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+        )
     }
 }

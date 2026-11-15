@@ -19,7 +19,8 @@ sealed class IncidentType(val slug: String, val title: String) {
             Encroachment, NoisePollution
         )
 
-        // Reverse lookup by tag so the authority table's tags work
         fun bySlug(slug: String): IncidentType? = all().find { it.slug == slug }
+
+        fun titleFor(slug: String): String = bySlug(slug)?.title ?: slug.replace('_', ' ')
     }
 }

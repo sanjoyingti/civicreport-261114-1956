@@ -1,199 +1,287 @@
 package com.arin.civicreport.ui.screens
 
-import android.net.Uri
+import android.Manifest
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CameraAlt
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.CircleOutline
 import androidx.compose.material.icons.filled.PhotoLibrary
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.arin.civicreport.ui.location.LocationManager
 import com.arin.civicreport.ui.media.CameraManager
+import com.arin.civicreport.ui.media.GalleryManager
+import com.arin.civicreport.ui.screens.report.ReportFlowViewModel
 import com.arin.civicreport.ui.util.PermissionManager
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CaptureScreen(
-    incidentTypes: List<String>,
+    reportViewModel: ReportFlowViewModel,
     permissionManager: PermissionManager,
-    onCaptureSuccess: (Uri, String) -> Unit,
-    onChooseGallery: (Uri, String) -> Unit,
-    onCameraError: (String) -> Unit,
-    onRetryCamera: () -> Unit
+    onBack: () -> Unit,
+    onCaptured: () -> Unit
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    var capturedUri by remember { mutableStateOf<Uri?>(null) }
-    var captureMode by remember { mutableStateOf<CaptureMode>(CaptureMode.PhotoMode) }
-    var cameraReady by remember { mutableStateOf(false) }
-    var showError by remember { mutableStateOf<String?>(null) }
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        uri?.let {
-            val type = if (it.toString().lowercase().endsWith(".mp4") || it.toString().lowercase().endsWith(".webm")) "video" else "photo"
-            onChooseGallery(it, type)
-        }
-    }
-
+    val scope = rememberCoroutineScope()
     val cameraManager = remember { CameraManager(context) }
+    val locationManager = remember { LocationManager(context) }
 
-    LaunchedEffect(Unit) {
-        cameraManager.initializeCamera(lifecycleOwner) {
-            cameraReady = true
+    var previewView by remember { mutableStateOf<PreviewView?>(null) }
+    var cameraReady by remember { mutableStateOf(false) }
+    var recording by remember { mutableStateOf(false) }
+    var cameraGranted by remember { mutableStateOf(permissionManager.hasCamera(context)) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var status by remember { mutableStateOf<String?>(null) }
+
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        cameraGranted = granted
+        if (!granted) error = "Camera permission denied. You can still pick from the gallery."
+    }
+    val audioPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { }
+    val galleryLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        val mime = context.contentResolver.getType(uri).orEmpty()
+        val isVideo = mime.startsWith("video")
+        reportViewModel.setMedia(uri.toString(), if (isVideo) "video" else "photo")
+        val gps = if (!isVideo) GalleryManager.extractExifGPS(context, uri) else null
+        if (gps != null) {
+            scope.launch {
+                val loc = locationManager.reverseGeocode(gps.first, gps.second)
+                reportViewModel.setLocation(
+                    loc.latitude, loc.longitude, loc.address,
+                    loc.city, loc.district, loc.state, loc.pincode
+                )
+                onCaptured()
+            }
+        } else {
+            onCaptured()
         }
     }
 
-    fun takePhoto() {
-        if (!permissionManager.hasCamera(context)) {
-            permissionManager.requestCameraPermission()
-            onCameraError("Camera permission denied")
+    DisposableEffect(Unit) {
+        onDispose { cameraManager.release() }
+    }
+
+    LaunchedEffect(cameraGranted, previewView) {
+        val view = previewView
+        if (cameraGranted && view != null) {
+            cameraManager.bind(
+                lifecycleOwner = lifecycleOwner,
+                previewView = view,
+                onReady = { cameraReady = true },
+                onError = { message -> error = message }
+            )
+        }
+    }
+
+    fun capturePhoto() {
+        if (!cameraGranted) {
+            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
             return
         }
         if (!cameraReady) {
-            onCameraError("Camera not ready")
+            error = "The camera is still starting, try again in a moment."
             return
         }
-        cameraManager.takePhoto(emptyPreviewView, { uri ->
-            capturedUri = uri
-            onCaptureSuccess(uri, "photo")
-        }, onError = { err ->
-            showError = "Camera error: $err"
-        })
-    }
-
-    fun takeVideo() {
-        if (!permissionManager.hasCamera(context)) {
-            permissionManager.requestCameraPermission()
-            onCameraError("Camera permission denied")
-            return
-        }
-        if (!cameraReady) {
-            onCameraError("Camera not ready")
-            return
-        }
-        cameraManager.startVideo(emptyPreviewView, { uri ->
-            capturedUri = uri
-            onCaptureSuccess(uri, "video")
-        }, onError = { err ->
-            showError = "Camera error: $err"
-        })
-    }
-
-    fun stopVideo() {
-        cameraManager.stopVideo(emptyPreviewView, { uri ->
-            capturedUri = uri
-            onCaptureSuccess(uri, "video")
-        }, onError = { err ->
-            showError = "Camera error: $err"
-        })
-    }
-
-    fun openGallery() {
-        if (!permissionManager.hasReadMedia(context) && !permissionManager.hasReadMediaForLegacy(context)) {
-            onCameraError("Gallery permission denied")
-            return
-        }
-        launcher.launch(
-            if (captureMode == CaptureMode.VideoMode) "video/*" else "image/*"
+        error = null
+        status = "Saving photo..."
+        cameraManager.takePhoto(
+            onSaved = { uri ->
+                status = null
+                reportViewModel.setMedia(uri.toString(), "photo")
+                onCaptured()
+            },
+            onError = { message ->
+                status = null
+                error = message
+            }
         )
     }
 
-    fun cancelCapture() {
-        capturedUri = null
-        onRetryCamera()
+    fun toggleRecording() {
+        if (!cameraGranted) {
+            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+            return
+        }
+        if (!cameraReady) {
+            error = "The camera is still starting, try again in a moment."
+            return
+        }
+        error = null
+        if (recording) {
+            cameraManager.stopRecording()
+            recording = false
+            status = "Saving video..."
+        } else {
+            if (!permissionManager.hasAudio(context)) {
+                audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            }
+            recording = true
+            status = "Recording..."
+            cameraManager.startRecording(
+                onFinished = { uri ->
+                    recording = false
+                    status = null
+                    reportViewModel.setMedia(uri.toString(), "video")
+                    onCaptured()
+                },
+                onError = { message ->
+                    recording = false
+                    status = null
+                    error = message
+                }
+            )
+        }
     }
 
-    val emptyPreviewView = androidx.camera.view.PreviewView(context)
-
     Scaffold(topBar = {
-        TopAppBar(title = { Text("Capture media", fontWeight = FontWeight.Bold) })
+        TopAppBar(
+            title = { Text("Capture media", fontWeight = FontWeight.Bold) },
+            navigationIcon = {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
+                }
+            }
+        )
     }) { padding ->
-        Column(modifier = Modifier
-            .fillMaxSize()
-            .padding(padding)
-            .padding(16.dp)) {
-            Text("Viewfinder", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            if (error != null) {
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer
+                    )
+                ) {
+                    Text(
+                        error ?: "",
+                        modifier = Modifier.padding(12.dp),
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                }
+            }
+            if (status != null) {
+                Text(status ?: "", style = MaterialTheme.typography.bodyMedium)
+            }
+
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(240.dp)
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                    .height(260.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color.Black),
                 contentAlignment = Alignment.Center
             ) {
-                if (!cameraReady) {
-                    CircularProgressIndicator()
-                }
-                Text("Camera preview available at capture time", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-            if (capturedUri != null) {
-                Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Text("Preview: ${capturedUri?.lastPathSegment}", style = MaterialTheme.typography.bodyMedium)
-                    }
-                }
-                Spacer(modifier = Modifier.height(12.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    Button(onClick = cancelCapture) { Text("Retake") }
-                    Button(onClick = {
-                        capturedUri?.let {
-                            onCaptureSuccess(it, if (captureMode == CaptureMode.VideoMode) "video" else "photo")
-                        }
-                    }) { Text("Confirm") }
-                }
-            } else {
-                Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Text("How would you like to capture the incident?", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    SelectionRow(mode = CaptureMode.PhotoMode, selected = captureMode == CaptureMode.PhotoMode, onClick = { captureMode = CaptureMode.PhotoMode })
-                    SelectionRow(mode = CaptureMode.VideoMode, selected = captureMode == CaptureMode.VideoMode, onClick = { captureMode = CaptureMode.VideoMode })
-                    Button(
-                        onClick = {
-                            if (permissionManager.hasCamera(context) && cameraReady) {
-                                if (captureMode == CaptureMode.VideoMode) takeVideo() else takePhoto()
-                            } else permissionManager.requestCameraPermission()
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(Icons.Default.CameraAlt, contentDescription = null); Spacer(modifier = Modifier.width(8.dp)); Text(if (captureMode == CaptureMode.VideoMode) "Record Video" else "Take Photo")
-                    }
-                    Button(
-                        onClick = { openGallery() },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
-                    ) {
-                        Icon(Icons.Default.PhotoLibrary, contentDescription = null); Spacer(modifier = Modifier.width(8.dp)); Text("Choose from Gallery")
-                    }
+                AndroidView(
+                    modifier = Modifier.fillMaxSize(),
+                    factory = { ctx -> PreviewView(ctx).also { previewView = it } }
+                )
+                if (!cameraGranted) {
+                    Text(
+                        "Camera permission is needed for the live preview",
+                        color = Color.White,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                } else if (!cameraReady) {
+                    CircularProgressIndicator(color = Color.White)
                 }
             }
-        }
-    }
-}
 
-sealed class CaptureMode { object PhotoMode : CaptureMode; object VideoMode : CaptureMode; object None : CaptureMode }
-
-@Composable
-private fun SelectionRow(mode: CaptureMode, selected: Boolean, onClick: () -> Unit) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .border(2.dp, if (selected) MaterialTheme.colorScheme.primary else Color.Transparent, RoundedCornerShape(10.dp)),
-        colors = CardDefaults.cardColors(containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant)
-    ) {
-        Row(modifier = Modifier.padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text(if (mode == CaptureMode.PhotoMode) "Take Photo" else "Record Video", fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
-            Icon(if (selected) Icons.Default.CheckCircle else Icons.Default.CircleOutline, contentDescription = null, tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline)
+            Button(onClick = { capturePhoto() }, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Filled.CameraAlt, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Take photo")
+            }
+            Button(
+                onClick = { toggleRecording() },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (recording) MaterialTheme.colorScheme.error
+                    else MaterialTheme.colorScheme.primary
+                )
+            ) {
+                Text(if (recording) "Stop recording" else "Record video")
+            }
+            OutlinedButton(
+                onClick = { galleryLauncher.launch("image/*") },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.Filled.PhotoLibrary, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Photo from gallery")
+            }
+            OutlinedButton(
+                onClick = { galleryLauncher.launch("video/*") },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.Filled.PhotoLibrary, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Video from gallery")
+            }
+            Text(
+                "Photos and videos are saved with the exact GPS position of the spot.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }

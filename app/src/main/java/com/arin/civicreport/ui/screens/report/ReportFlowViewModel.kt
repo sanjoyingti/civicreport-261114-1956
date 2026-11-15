@@ -25,12 +25,12 @@ data class ReportDraft(
     val hasLocation: Boolean get() = latitude != 0.0 || longitude != 0.0
 }
 
-class ReportViewModel : ViewModel() {
+class ReportFlowViewModel : ViewModel() {
 
     private val _draft = MutableStateFlow(ReportDraft())
     val draft: StateFlow<ReportDraft> = _draft.asStateFlow()
 
-    fun startDraft(types: List<String>) {
+    fun start(types: List<String>) {
         _draft.value = ReportDraft(incidentTypes = types)
     }
 
@@ -62,10 +62,10 @@ class ReportViewModel : ViewModel() {
         _draft.value = _draft.value.copy(description = text)
     }
 
-    fun setAuthorities(authorities: List<Authority>) {
+    fun setAuthorities(authorities: List<Authority>, selectedIds: List<String>) {
         _draft.value = _draft.value.copy(
             authorities = authorities,
-            selectedAuthorityIds = authorities.map { it.id }
+            selectedAuthorityIds = selectedIds
         )
     }
 

@@ -7,178 +7,119 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.arin.civicreport.data.Repository
-import com.arin.civicreport.model.IncidentStatus
-import com.arin.civicreport.model.Report as ReportModel
+import com.arin.civicreport.ui.screens.AuthorityFinderScreen
+import com.arin.civicreport.ui.screens.CaptureScreen
 import com.arin.civicreport.ui.screens.HomeScreen
 import com.arin.civicreport.ui.screens.IncidentSelectorScreen
-import com.arin.civicreport.ui.screens.CaptureScreen
 import com.arin.civicreport.ui.screens.LocationDetailsScreen
-import com.arin.civicreport.ui.screens.AuthorityFinderScreen
+import com.arin.civicreport.ui.screens.ReportViewScreen
 import com.arin.civicreport.ui.screens.ReviewAndSendScreen
 import com.arin.civicreport.ui.screens.SettingsScreen
-import com.arin.civicreport.ui.screens.ReportViewScreen
-import com.arin.civicreport.ui.screens.report.ReportViewModel
+import com.arin.civicreport.ui.screens.report.ReportFlowViewModel
 import com.arin.civicreport.ui.util.PermissionManager
 import com.arin.civicreport.ui.util.Prefs
+
+object Routes {
+    const val HOME = "home"
+    const val INCIDENT = "incident"
+    const val CAPTURE = "capture"
+    const val LOCATION = "location"
+    const val AUTHORITIES = "authorities"
+    const val REVIEW = "review"
+    const val REPORT_VIEW = "report"
+    const val SETTINGS = "settings"
+
+    fun report(id: Long) = "$REPORT_VIEW/$id"
+}
 
 @Composable
 fun AppNavigation(
     navController: NavHostController,
     repo: Repository,
     prefs: Prefs,
-    permissionManager: PermissionManager
+    permissionManager: PermissionManager,
+    reportViewModel: ReportFlowViewModel
 ) {
-    NavHost(navController = navController, startDestination = NavigationRoute.HOME) {
-        composable(NavigationRoute.HOME) {
+    NavHost(navController = navController, startDestination = Routes.HOME) {
+        composable(Routes.HOME) {
             HomeScreen(
                 repo = repo,
-                prefs = prefs,
-                onOpenSettings = { navController.navigate(NavigationRoute.SETTINGS) },
+                onOpenSettings = { navController.navigate(Routes.SETTINGS) },
                 onReportNew = {
-                    repo.seedAuthorities().let {}
-                    navController.navigate(NavigationRoute.INCIDENT_SELECTOR)
+                    reportViewModel.reset()
+                    navController.navigate(Routes.INCIDENT)
                 },
-                onOpenReport = { id ->
-                    navController.navigate("${NavigationRoute.REPORT_VIEW}$id")
-                }
+                onOpenReport = { id -> navController.navigate(Routes.report(id)) }
             )
         }
-        composable(NavigationRoute.INCIDENT_SELECTOR) {
+        composable(Routes.INCIDENT) {
             IncidentSelectorScreen(
-                onContinue = { selected ->
-                    navController.navigate("${NavigationRoute.CAPTURE}${selected.joinToString("-")}")
+                onBack = { navController.popBackStack() },
+                onContinue = { types ->
+                    reportViewModel.start(types)
+                    navController.navigate(Routes.CAPTURE)
                 }
             )
         }
-        composable(
-            route = "${NavigationRoute.CAPTURE}/{types}",
-            arguments = listOf(navArgument("types") { type = NavType.StringType })
-        ) { backStackEntry ->
-            val types = backStackEntry.arguments?.getString("types")?.split("-") ?: emptyList()
+        composable(Routes.CAPTURE) {
             CaptureScreen(
-                incidentTypes = types,
+                reportViewModel = reportViewModel,
                 permissionManager = permissionManager,
-                onCaptureSuccess = { uri, mediaType ->
-                    navController.previousBackStackEntry?.savedStateHandle?.set("mediaUri", uri.toString())
-                    navController.previousBackStackEntry?.savedStateHandle?.set("mediaType", mediaType)
-                    navController.navigate(NavigationRoute.LOCATION_DETAILS)
-                },
-                onChooseGallery = { uri, mediaType ->
-                    navController.previousBackStackEntry?.savedStateHandle?.set("mediaUri", uri.toString())
-                    navController.previousBackStackEntry?.savedStateHandle?.set("mediaType", mediaType)
-                    navController.navigate(NavigationRoute.LOCATION_DETAILS)
-                },
-                onCameraError = { message -> },
-                onRetryCamera = {}
+                onBack = { navController.popBackStack() },
+                onCaptured = {
+                    navController.navigate(Routes.LOCATION) {
+                        popUpTo(Routes.CAPTURE) { inclusive = true }
+                    }
+                }
             )
         }
-        composable(NavigationRoute.LOCATION_DETAILS) {
+        composable(Routes.LOCATION) {
             LocationDetailsScreen(
-                incidentTypes = navController.previousBackStackEntry?.savedStateHandle?.getString("types")?.split("-") ?: emptyList(),
-                mediaUri = navController.previousBackStackEntry?.savedStateHandle?.getString("mediaUri"),
-                mediaType = navController.previousBackStackEntry?.savedStateHandle?.getString("mediaType") ?: "photo",
-                latitude = navController.previousBackStackEntry?.savedStateHandle?.get<Double>("lat") ?: 0.0,
-                longitude = navController.previousBackStackEntry?.savedStateHandle?.get<Double>("lon") ?: 0.0,
-                address = navController.previousBackStackEntry?.savedStateHandle?.getString("address") ?: "",
-                onLocationConfirmed = { lat, lon, addr ->
-                    navController.previousBackStackEntry?.savedStateHandle?.set("lat", lat)
-                    navController.previousBackStackEntry?.savedStateHandle?.set("lon", lon)
-                    navController.previousBackStackEntry?.savedStateHandle?.set("address", addr)
-                    navController.navigate(NavigationRoute.AUTHORITY)
-                },
-                onRetake = { navController.popBackStack(NavigationRoute.CAPTURE, inclusive = false) }
+                reportViewModel = reportViewModel,
+                permissionManager = permissionManager,
+                onBack = { navController.popBackStack() },
+                onConfirmed = { navController.navigate(Routes.AUTHORITIES) }
             )
         }
-        composable(NavigationRoute.AUTHORITY) {
-            val vm = androidx.lifecycle.viewmodel.compose.viewModel<ReportViewModel>()
-            val types = navController.previousBackStackEntry?.savedStateHandle?.getString("types")?.split("-") ?: emptyList()
+        composable(Routes.AUTHORITIES) {
             AuthorityFinderScreen(
-                incidentTypes = types,
-                latitude = navController.previousBackStackEntry?.savedStateHandle?.get<Double>("lat") ?: 0.0,
-                longitude = navController.previousBackStackEntry?.savedStateHandle?.get<Double>("lon") ?: 0.0,
-                address = navController.previousBackStackEntry?.savedStateHandle?.getString("address") ?: "",
-                state = "Maharashtra",
-                onContinue = { authorities ->
-                    vm.updateAuthorities(authorities)
-                    navController.navigate(NavigationRoute.REVIEW_SEND)
-                }
+                repo = repo,
+                reportViewModel = reportViewModel,
+                onBack = { navController.popBackStack() },
+                onContinue = { navController.navigate(Routes.REVIEW) }
             )
         }
-        composable(NavigationRoute.REVIEW_SEND) {
-            val vm = androidx.lifecycle.viewmodel.compose.viewModel<ReportViewModel>()
-            val types = navController.previousBackStackEntry?.savedStateHandle?.getString("types")?.split("-") ?: emptyList()
+        composable(Routes.REVIEW) {
             ReviewAndSendScreen(
-                incidentTypes = types,
-                mediaUri = navController.previousBackStackEntry?.savedStateHandle?.getString("mediaUri"),
-                mediaType = navController.previousBackStackEntry?.savedStateHandle?.getString("mediaType") ?: "photo",
-                latitude = navController.previousBackStackEntry?.savedStateHandle?.get<Double>("lat") ?: 0.0,
-                longitude = navController.previousBackStackEntry?.savedStateHandle?.get<Double>("lon") ?: 0.0,
-                address = navController.previousBackStackEntry?.savedStateHandle?.getString("address") ?: "",
-                authorities = vm.reportSelectedAuthorities(),
-                sendMethod = prefs.defaultSendMethod,
-                onBack = { navController.popBackStack(NavigationRoute.AUTHORITY, inclusive = false) },
-                onSaveAndSend = { selectedAuths, method ->
-                    vm.updateAuthorities(selectedAuths.map { id -> vm.reportSelectedAuthorities().find { a -> a.id == id }!! })
-                    val newReport = ReportModel(
-                        id = vm.reportId.value,
-                        incidentTypes = types,
-                        mediaUris = listOf(navController.previousBackStackEntry?.savedStateHandle?.getString("mediaUri") ?: ""),
-                        mediaType = navController.previousBackStackEntry?.savedStateHandle?.getString("mediaType") ?: "photo",
-                        timestamp = System.currentTimeMillis(),
-                        latitude = navController.previousBackStackEntry?.savedStateHandle?.get<Double>("lat") ?: 0.0,
-                        longitude = navController.previousBackStackEntry?.savedStateHandle?.get<Double>("lon") ?: 0.0,
-                        address = navController.previousBackStackEntry?.savedStateHandle?.getString("address") ?: "",
-                        city = navController.previousBackStackEntry?.savedStateHandle?.getString("city") ?: "",
-                        district = navController.previousBackStackEntry?.savedStateHandle?.getString("district") ?: "",
-                        state = "Maharashtra",
-                        pincode = navController.previousBackStackEntry?.savedStateHandle?.getString("pincode") ?: "",
-                        description = navController.previousBackStackEntry?.savedStateHandle?.getString("description") ?: "",
-                        status = IncidentStatus.Sent,
-                        sentAuthorities = selectedAuths,
-                        lastUpdated = System.currentTimeMillis(),
-                        sendMethod = method
-                    )
-                    vm.setReportId(newReport.id)
-                    repo.saveReport(newReport)
-                    navController.navigate("${NavigationRoute.REPORT_VIEW}${newReport.id}")
-                }
-            )
-        }
-        composable(
-            route = "${NavigationRoute.REPORT_VIEW}/{id}",
-            arguments = listOf(navArgument("id") { type = NavType.LongType })
-        ) { backStackEntry ->
-            val id = backStackEntry.arguments?.getLong("id") ?: 0L
-            ReportViewScreen(
-                reportId = id,
                 repo = repo,
                 prefs = prefs,
-                onOpenSettings = { navController.navigate(NavigationRoute.SETTINGS) },
+                reportViewModel = reportViewModel,
                 onBack = { navController.popBackStack() },
-                permissionManager = permissionManager
+                onSent = { id ->
+                    navController.navigate(Routes.report(id)) {
+                        popUpTo(Routes.HOME)
+                    }
+                }
             )
         }
-        composable(NavigationRoute.SETTINGS) {
+        composable(
+            route = "${Routes.REPORT_VIEW}/{id}",
+            arguments = listOf(navArgument("id") { type = NavType.LongType })
+        ) { entry ->
+            ReportViewScreen(
+                reportId = entry.arguments?.getLong("id") ?: 0L,
+                repo = repo,
+                onBack = { navController.popBackStack() },
+                onDeleted = { navController.popBackStack() }
+            )
+        }
+        composable(Routes.SETTINGS) {
             SettingsScreen(
                 repo = repo,
                 prefs = prefs,
-                onBack = { navController.popBackStack() },
-                onRequestPermission = { perm ->
-                    permissionManager.requestPermission(perm)
-                },
-                onAddAuthority = {}
+                permissionManager = permissionManager,
+                onBack = { navController.popBackStack() }
             )
         }
     }
-}
-
-object NavigationRoute {
-    const val HOME = "home"
-    const val INCIDENT_SELECTOR = "incident_selector"
-    const val CAPTURE = "capture"
-    const val LOCATION_DETAILS = "location_details"
-    const val AUTHORITY = "authority"
-    const val REVIEW_SEND = "review_send"
-    const val REPORT_VIEW = "report_view"
-    const val SETTINGS = "settings"
 }
