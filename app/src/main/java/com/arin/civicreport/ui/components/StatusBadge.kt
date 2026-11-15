@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.arin.civicreport.model.IncidentStatus
 
+/** Small coloured pill showing the state of a report. */
 @Composable
 fun StatusBadge(status: IncidentStatus) {
     val background = when (status) {
@@ -26,7 +27,7 @@ fun StatusBadge(status: IncidentStatus) {
     }
     Surface(color = background, shape = MaterialTheme.shapes.small) {
         Text(
-            text = status.name.uppercase(),
+            text = status.name,
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
             style = MaterialTheme.typography.labelSmall,
             color = textColour
