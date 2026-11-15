@@ -1,17 +1,17 @@
 package com.arin.civicreport.ui.util
 
 import android.Manifest
-import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 
-class PermissionManager(private val activity: Activity) {
+class PermissionManager(private val activity: ComponentActivity) {
 
     private val singleLauncher = activity.registerForActivityResult(
         ActivityResultContracts.RequestPermission()

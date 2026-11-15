@@ -19,24 +19,24 @@ fun StatusBadge(status: IncidentStatus) {
         IncidentStatus.Sent -> MaterialTheme.colorScheme.primary
         IncidentStatus.Pending -> Color(0xFFFFA600)
         IncidentStatus.Failed -> MaterialTheme.colorScheme.error
-        IncidentStatus.Draft -> MaterialTheme.colorScheme.secondaryContainer
+        IncidentStatus.Draft -> MaterialTheme.colorScheme.surfaceVariant
     }
-    val onContainer = when (status) {
+    val content = when (status) {
         IncidentStatus.Sent -> MaterialTheme.colorScheme.onPrimary
-        IncidentStatus.Pending -> Color(0xFF1B1B1B)
+        IncidentStatus.Pending -> Color(0xFF3A2600)
         IncidentStatus.Failed -> MaterialTheme.colorScheme.onError
-        IncidentStatus.Draft -> MaterialTheme.colorScheme.onSecondaryContainer
+        IncidentStatus.Draft -> MaterialTheme.colorScheme.onSurfaceVariant
     }
     Surface(
         color = container,
+        contentColor = content,
         shape = RoundedCornerShape(50)
     ) {
         Text(
             text = status.name,
-            color = onContainer,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
             style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+            fontWeight = FontWeight.Bold
         )
     }
 }

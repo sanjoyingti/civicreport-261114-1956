@@ -1,9 +1,8 @@
 package com.arin.civicreport.ui.screens
 
-import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,12 +17,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Email
-import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -50,6 +49,12 @@ import com.arin.civicreport.model.IncidentType
 import com.arin.civicreport.ui.screens.report.ReportFlowViewModel
 import java.util.Locale
 
+private fun levelRank(level: String): Int = when (level) {
+    "Local" -> 0
+    "State" -> 1
+    else -> 2
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AuthorityFinderScreen(
@@ -61,59 +66,54 @@ fun AuthorityFinderScreen(
     val context = LocalContext.current
     val draft by reportViewModel.draft.collectAsState()
     var loading by remember { mutableStateOf(true) }
-    var found by remember { mutableStateOf<List<Authority>>(emptyList()) }
-    var reloadKey by remember { mutableStateOf(0) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val selected = draft.selectedAuthorityIds.toSet()
 
-    LaunchedEffect(draft.incidentTypes, draft.state, draft.city, reloadKey) {
+    LaunchedEffect(draft.incidentTypes, draft.state, draft.city) {
         loading = true
-        val collected = mutableListOf<Authority>()
-        draft.incidentTypes.forEach { tag ->
-            collected += repo.getAuthoritiesForIncident(
-                tag,
-                draft.state,
-                draft.city.lowercase(Locale.getDefault())
-            )
+        error = null
+        try {
+            val found = mutableListOf<Authority>()
+            draft.incidentTypes.forEach { tag ->
+                repo.getAuthoritiesForIncident(
+                    tag,
+                    draft.state,
+                    draft.city.lowercase(Locale.US)
+                ).forEach { found.add(it) }
+            }
+            val unique = found
+                .distinctBy { it.id }
+                .sortedWith(compareBy({ levelRank(it.level) }, { it.order }, { it.name }))
+            reportViewModel.setAuthorities(unique, unique.map { it.id })
+        } catch (e: Exception) {
+            error = e.message ?: "The contact list could not be loaded."
+        } finally {
+            loading = false
         }
-        val unique = collected.distinctBy { it.id }.sortedWith(
-            compareBy({ levelOrder(it.level) }, { it.order }, { it.name })
-        )
-        found = unique
-        reportViewModel.setAuthorities(unique, unique.map { it.id })
-        loading = false
     }
 
     fun call(phone: String) {
-        if (phone.isBlank()) return
-        val intent = Intent(
-            Intent.ACTION_DIAL,
-            Uri.parse("tel:" + phone.filter { it.isDigit() || it == '+' })
-        )
         try {
-            context.startActivity(intent)
-        } catch (ignored: ActivityNotFoundException) {
+            context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + phone.replace(" ", ""))))
+        } catch (e: Exception) {
+            error = "No dialer app found."
         }
     }
 
     fun mail(email: String) {
-        if (email.isBlank()) return
-        val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:$email"))
         try {
-            context.startActivity(intent)
-        } catch (ignored: ActivityNotFoundException) {
+            context.startActivity(Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:$email")))
+        } catch (e: Exception) {
+            error = "No email app found."
         }
     }
 
     Scaffold(topBar = {
         TopAppBar(
-            title = { Text("Concerned authorities", fontWeight = FontWeight.Bold) },
+            title = { Text("Matched authorities", fontWeight = FontWeight.Bold) },
             navigationIcon = {
                 IconButton(onClick = onBack) {
                     Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
-                }
-            },
-            actions = {
-                IconButton(onClick = { reloadKey++ }) {
-                    Icon(Icons.Filled.Refresh, contentDescription = "Search again")
                 }
             }
         )
@@ -124,141 +124,139 @@ fun AuthorityFinderScreen(
                 .padding(padding)
                 .padding(horizontal = 16.dp)
         ) {
-            Spacer(modifier = Modifier.height(8.dp))
             Text(
-                draft.incidentTypes.joinToString(", ") { IncidentType.titleFor(it) },
-                style = MaterialTheme.typography.titleMedium,
+                "Issues: ${draft.incidentTypes.joinToString(", ") { IncidentType.titleFor(it) }}",
+                style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Bold
             )
             Text(
-                "Matched to " + listOfNotNull(
-                    draft.city.takeIf { it.isNotBlank() },
-                    draft.district.takeIf { it.isNotBlank() },
-                    draft.state.takeIf { it.isNotBlank() }
-                ).joinToString(", ").ifBlank { "the detected area" },
-                style = MaterialTheme.typography.bodyMedium,
+                draft.address.ifBlank { "Location pending" },
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            Spacer(modifier = Modifier.height(8.dp))
-
-            when {
-                loading -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            CircularProgressIndicator()
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text("Matching offices to this spot...")
-                        }
-                    }
-                }
-
-                found.isEmpty() -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("No office matched", style = MaterialTheme.typography.titleMedium)
-                            Text(
-                                "The state or town may not be recognised. You can still continue and add contacts in Settings.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(horizontal = 24.dp)
-                            )
-                        }
-                    }
-                }
-
-                else -> {
-                    val selected = draft.selectedAuthorityIds
-                    LazyColumn(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(found) { authority ->
-                            val isSelected = selected.contains(authority.id)
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { reportViewModel.toggleAuthority(authority.id) },
-                                colors = CardDefaults.cardColors(
-                                    containerColor = if (isSelected)
-                                        MaterialTheme.colorScheme.primaryContainer
-                                    else MaterialTheme.colorScheme.surfaceVariant
-                                )
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Checkbox(
-                                        checked = isSelected,
-                                        onCheckedChange = {
-                                            reportViewModel.toggleAuthority(authority.id)
-                                        }
-                                    )
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(authority.name, fontWeight = FontWeight.Bold)
-                                        Text(
-                                            authority.level + " level",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                        if (authority.email.isNotBlank()) {
-                                            Text(
-                                                authority.email,
-                                                style = MaterialTheme.typography.bodySmall
-                                            )
-                                        }
-                                        if (authority.phone.isNotBlank()) {
-                                            Text(
-                                                authority.phone,
-                                                style = MaterialTheme.typography.bodySmall
-                                            )
-                                        }
-                                    }
-                                    if (authority.email.isNotBlank()) {
-                                        IconButton(onClick = { mail(authority.email) }) {
-                                            Icon(Icons.Filled.Email, contentDescription = "Email")
-                                        }
-                                    }
-                                    if (authority.phone.isNotBlank()) {
-                                        IconButton(onClick = { call(authority.phone) }) {
-                                            Icon(Icons.Filled.Call, contentDescription = "Call")
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
             Text(
-                "${draft.selectedAuthorityIds.size} selected. Chief Minister offices and the PMO are included for every complaint.",
+                "Matched from the local office up to the Chief Minister's office and the PMO using the " +
+                    "detected district and state.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(modifier = Modifier.height(8.dp))
+
+            if (error != null) {
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        error ?: "",
+                        modifier = Modifier.padding(12.dp),
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                contentAlignment = Alignment.Center
+            ) {
+                when {
+                    loading -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        CircularProgressIndicator()
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("Searching for the right offices...")
+                    }
+                    draft.authorities.isEmpty() -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("No office matched this combination", fontWeight = FontWeight.Bold)
+                        Text(
+                            "You can still continue and add a contact later in Settings.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(draft.authorities) { authority ->
+                            AuthorityRow(
+                                authority = authority,
+                                checked = selected.contains(authority.id),
+                                onToggle = { reportViewModel.toggleAuthority(authority.id) },
+                                onCall = { call(authority.phone) },
+                                onMail = { mail(authority.email) }
+                            )
+                        }
+                        item { Spacer(modifier = Modifier.height(8.dp)) }
+                    }
+                }
+            }
+
             Button(
                 onClick = onContinue,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 16.dp),
-                enabled = draft.selectedAuthorityIds.isNotEmpty()
+                    .padding(vertical = 12.dp),
+                enabled = selected.isNotEmpty()
             ) {
-                Text("Review and send")
+                Text("Continue with ${selected.size} office(s)")
             }
         }
     }
 }
 
-private fun levelOrder(level: String): Int = when (level) {
-    "Local" -> 0
-    "State" -> 1
-    else -> 2
+@Composable
+private fun AuthorityRow(
+    authority: Authority,
+    checked: Boolean,
+    onToggle: () -> Unit,
+    onCall: () -> Unit,
+    onMail: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = if (checked) MaterialTheme.colorScheme.primaryContainer
+            else MaterialTheme.colorScheme.surfaceVariant
+        )
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onToggle) {
+                Icon(
+                    imageVector = if (checked) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked,
+                    contentDescription = if (checked) "Included" else "Excluded",
+                    tint = if (checked) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(authority.name, fontWeight = FontWeight.Bold)
+                Text(
+                    "${authority.level} level",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (authority.email.isNotBlank()) {
+                    Text(authority.email, style = MaterialTheme.typography.bodySmall)
+                }
+                if (authority.phone.isNotBlank()) {
+                    Text(authority.phone, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+            if (authority.phone.isNotBlank()) {
+                IconButton(onClick = onCall) {
+                    Icon(Icons.Filled.Call, contentDescription = "Call")
+                }
+            }
+            if (authority.email.isNotBlank()) {
+                IconButton(onClick = onMail) {
+                    Icon(Icons.Filled.Email, contentDescription = "Email")
+                }
+            }
+        }
+    }
 }

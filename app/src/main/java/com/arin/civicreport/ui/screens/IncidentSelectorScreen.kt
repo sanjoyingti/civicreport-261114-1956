@@ -75,6 +75,7 @@ fun IncidentSelectorScreen(
             Spacer(modifier = Modifier.height(12.dp))
             LazyVerticalGrid(
                 columns = GridCells.Fixed(2),
+                modifier = Modifier.weight(1f),
                 contentPadding = PaddingValues(vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
