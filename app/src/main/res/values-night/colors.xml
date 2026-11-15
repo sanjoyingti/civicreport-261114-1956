@@ -1,5 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="window_background">#1A1C18</color>
-    <color name="app_green">#A8D7A8</color>
+    <color name="background">#FF1A1C18</color>
 </resources>

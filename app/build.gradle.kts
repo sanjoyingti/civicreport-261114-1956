@@ -67,5 +67,6 @@ implementation("androidx.camera:camera-lifecycle:1.5.0")
 implementation("androidx.camera:camera-view:1.5.0")
 implementation("com.google.android.gms:play-services-location:21.3.0")
 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
+implementation("com.google.android.material:material:1.14.0")
 ksp("androidx.room:room-compiler:2.8.5")
         }
