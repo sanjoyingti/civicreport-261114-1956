@@ -79,45 +79,46 @@ fun IncidentSelectorScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(types.size) { index ->
-                    val type = types[index]
-                    val isSelected = selected.contains(type.slug)
-                    Card(
-                        modifier = Modifier
-                            .aspectRatio(1f)
-                            .clickable {
-                                selected =
-                                    if (isSelected) selected - type.slug else selected + type.slug
-                            }
-                            .border(
-                                width = if (isSelected) 3.dp else 1.dp,
-                                color = if (isSelected) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.outline,
-                                shape = RoundedCornerShape(12.dp)
-                            ),
-                        colors = CardDefaults.cardColors(
-                            containerColor = if (isSelected)
-                                MaterialTheme.colorScheme.primaryContainer
-                            else MaterialTheme.colorScheme.surfaceVariant
-                        )
-                    ) {
-                        Column(
-                            modifier = Modifier.fillMaxSize(),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            Text(
-                                type.title,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(8.dp)
+                types.forEach { type ->
+                    item {
+                        val isSelected = selected.contains(type.slug)
+                        Card(
+                            modifier = Modifier
+                                .aspectRatio(1f)
+                                .clickable {
+                                    selected =
+                                        if (isSelected) selected - type.slug else selected + type.slug
+                                }
+                                .border(
+                                    width = if (isSelected) 3.dp else 1.dp,
+                                    color = if (isSelected) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.outline,
+                                    shape = RoundedCornerShape(12.dp)
+                                ),
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (isSelected)
+                                    MaterialTheme.colorScheme.primaryContainer
+                                else MaterialTheme.colorScheme.surfaceVariant
                             )
-                            if (isSelected) {
-                                Icon(
-                                    Icons.Filled.CheckCircle,
-                                    contentDescription = "Selected",
-                                    tint = MaterialTheme.colorScheme.primary
+                        ) {
+                            Column(
+                                modifier = Modifier.fillMaxSize(),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Text(
+                                    type.title,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(8.dp)
                                 )
+                                if (isSelected) {
+                                    Icon(
+                                        Icons.Filled.CheckCircle,
+                                        contentDescription = "Selected",
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
                             }
                         }
                     }

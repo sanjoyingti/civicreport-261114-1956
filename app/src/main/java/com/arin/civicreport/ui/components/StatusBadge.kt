@@ -32,8 +32,8 @@ fun StatusBadge(status: IncidentStatus) {
         shape = RoundedCornerShape(50)
     ) {
         Text(
-            text = status.name,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+            text = status.name.uppercase(),
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp),
             style = MaterialTheme.typography.labelSmall
         )
     }
