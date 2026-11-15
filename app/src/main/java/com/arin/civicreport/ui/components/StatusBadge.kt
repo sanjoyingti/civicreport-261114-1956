@@ -1,46 +1,41 @@
 package com.arin.civicreport.ui.components
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.arin.civicreport.model.IncidentStatus
 
 @Composable
 fun StatusBadge(status: IncidentStatus) {
-    val label: String
-    val color: Color
-    when (status) {
-        IncidentStatus.Draft -> {
-            label = "Draft"
-            color = Color(0xFF6750A4)
-        }
-        IncidentStatus.Pending -> {
-            label = "Pending"
-            color = Color(0xFFB26A00)
-        }
-        IncidentStatus.Sent -> {
-            label = "Sent"
-            color = Color(0xFF206039)
-        }
-        IncidentStatus.Failed -> {
-            label = "Failed"
-            color = Color(0xFFB3261E)
-        }
+    val label = when (status) {
+        IncidentStatus.Draft -> "Draft"
+        IncidentStatus.Pending -> "Pending"
+        IncidentStatus.Sent -> "Sent"
+        IncidentStatus.Failed -> "Failed"
     }
-    Text(
-        text = label,
-        color = Color.White,
-        fontSize = 11.sp,
-        fontWeight = FontWeight.Bold,
-        modifier = Modifier
-            .background(color, RoundedCornerShape(8.dp))
-            .padding(horizontal = 10.dp, vertical = 3.dp)
-    )
+    val color = when (status) {
+        IncidentStatus.Draft -> MaterialTheme.colorScheme.outline
+        IncidentStatus.Pending -> Color(0xFF8A6D00)
+        IncidentStatus.Sent -> MaterialTheme.colorScheme.primary
+        IncidentStatus.Failed -> MaterialTheme.colorScheme.error
+    }
+    Surface(
+        color = color.copy(alpha = 0.16f),
+        shape = RoundedCornerShape(50)
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+            color = color,
+            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.labelSmall
+        )
+    }
 }
