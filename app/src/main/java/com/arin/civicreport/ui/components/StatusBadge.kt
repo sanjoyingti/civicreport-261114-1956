@@ -14,27 +14,29 @@ import com.arin.civicreport.model.IncidentStatus
 /** Small coloured pill showing the state of a report. */
 @Composable
 fun StatusBadge(status: IncidentStatus) {
-    val background = when (status) {
+    val container = when (status) {
         IncidentStatus.Sent -> MaterialTheme.colorScheme.primary
         IncidentStatus.Pending -> Color(0xFFFFA600)
         IncidentStatus.Failed -> MaterialTheme.colorScheme.error
         IncidentStatus.Draft -> MaterialTheme.colorScheme.secondaryContainer
     }
-    val textColour = when (status) {
+    val content = when (status) {
         IncidentStatus.Sent -> MaterialTheme.colorScheme.onPrimary
-        IncidentStatus.Pending -> Color(0xFF2B1B00)
+        IncidentStatus.Pending -> Color(0xFF231B00)
         IncidentStatus.Failed -> MaterialTheme.colorScheme.onError
         IncidentStatus.Draft -> MaterialTheme.colorScheme.onSecondaryContainer
     }
-    Surface(
-        color = background,
-        contentColor = textColour,
-        shape = RoundedCornerShape(50)
-    ) {
+    val label = when (status) {
+        IncidentStatus.Sent -> "Sent"
+        IncidentStatus.Pending -> "Pending"
+        IncidentStatus.Failed -> "Failed"
+        IncidentStatus.Draft -> "Draft"
+    }
+    Surface(color = container, contentColor = content, shape = RoundedCornerShape(50)) {
         Text(
-            text = status.name.uppercase(),
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp),
-            style = MaterialTheme.typography.labelSmall
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
         )
     }
 }
