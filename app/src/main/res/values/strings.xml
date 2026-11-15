@@ -1,7 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">DuarBagori Reports</string>
-    <string name="app_tagline">Report potholes, deforestation, illegal sand mining and more to the right officials.</string>
-    <string name="report_incident">Report Incident</string>
-    <string name="recent_reports">Recent reports</string>
+    <string name="file_provider_authority">com.arin.civicreport.fileprovider</string>
 </resources>

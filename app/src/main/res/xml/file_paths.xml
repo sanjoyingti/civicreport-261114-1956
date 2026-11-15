@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<paths>
-    <external-files-path name="media" path="media/" />
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <external-files-path name="external_media" path="media/" />
     <files-path name="internal_media" path="media/" />
-    <cache-path name="cache" path="." />
     <external-cache-path name="external_cache" path="." />
+    <cache-path name="internal_cache" path="." />
 </paths>
