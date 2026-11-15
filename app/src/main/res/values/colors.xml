@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="app_background">#FFFBFDF7</color>
-    <color name="app_primary">#FF206039</color>
-    <color name="app_on_primary">#FFFFFFFF</color>
+    <color name="window_background">#FFFBFDF7</color>
+    <color name="window_background_dark">#FF1A1C18</color>
+    <color name="accent">#FF206039</color>
+    <color name="accent_dark">#FFA8D7A8</color>
 </resources>
