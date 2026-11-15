@@ -1,21 +1,7 @@
 package com.arin.civicreport.data
 
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
-
 /** Seed data for authorities. Edit this file or use the Settings editor to extend. */
 object SeededAuthorities {
-
-    private val MaharashtraCities = listOf("mumbai", "pune", "nagpur", "nashik", "aurangabad", "thane", "navi mumbai")
-    private val KarnatakaCities = listOf("bangalore", "mysore", "hubli", "dharwad", "mangalore")
-    private val TnCities = listOf("chennai", "coimbatore", "madurai", "tiruchirappalli", "salem")
-    private val DelhiCities = listOf("delhi", "new delhi")
-    private val UpCities = listOf("lucknow", "kanpur", "varanasi", "agra", "prayagraj", "meerut")
-    private val GujaratCities = listOf("ahmedabad", "surat", "vadodara", "rajkot")
-    private val WbCities = listOf("kolkata", "siliguri", "asansol")
-    private val BiharCities = listOf("patna", "gaya", "bhagalpur")
-    private val RajCities = listOf("jaipur", "jodhpur", "udaipur", "kota")
-    private val KeralaCities = listOf("thiruvananthapuram", "kochi", "kozhikode", "kollam")
 
     fun all(): List<Authority> = listOf(
         // ---------------- Pothole / Bad Road ----------------
@@ -25,9 +11,9 @@ object SeededAuthorities {
             phone = "+91 22 2202 7161",
             email = "pwdmumbai@gmail.com",
             level = "Local",
-            activity_tags = "pothole,bad_road,road_defect",
-            applicable_states = json("Maharashtra"),
-            applicable_cities = json("mumbai"),
+            activity_tags = list("pothole", "bad_road", "road_defect"),
+            applicable_states = list("Maharashtra"),
+            applicable_cities = list("mumbai"),
             order = 1
         ),
         Authority(
@@ -36,9 +22,9 @@ object SeededAuthorities {
             phone = "15331",
             email = "complaints@bmcgov.com",
             level = "Local",
-            activity_tags = "pothole,bad_road,garbage_dumping,waterlogging,illegal_construction,encroachment",
-            applicable_states = json("Maharashtra"),
-            applicable_cities = json("mumbai","thane","navi mumbai"),
+            activity_tags = list("pothole", "bad_road", "garbage_dumping", "waterlogging", "illegal_construction", "encroachment"),
+            applicable_states = list("Maharashtra"),
+            applicable_cities = list("mumbai", "thane", "navi mumbai"),
             order = 2
         ),
         Authority(
@@ -47,20 +33,20 @@ object SeededAuthorities {
             phone = "+91 22 2202 8755",
             email = "traffic@maha.gov.in",
             level = "Local",
-            activity_tags = "pothole,bad_road,traffic",
-            applicable_states = json("Maharashtra"),
-            applicable_cities = json("mumbai"),
+            activity_tags = list("pothole", "bad_road"),
+            applicable_states = list("Maharashtra"),
+            applicable_cities = list("mumbai"),
             order = 3
         ),
         Authority(
-            id = "mh_pmda",
+            id = "mh_pwd_state",
             name = "PWD Maharashtra (State)",
             phone = "1553",
             email = "pmda-maharashtra@gov.in",
             level = "State",
-            activity_tags = "pothole,bad_road,road_defect",
-            applicable_states = json("Maharashtra"),
-            applicable_cities = json(""),
+            activity_tags = list("pothole", "bad_road", "road_defect"),
+            applicable_states = list("Maharashtra"),
+            applicable_cities = list(),
             order = 4
         ),
         Authority(
@@ -69,9 +55,9 @@ object SeededAuthorities {
             phone = "020 2612 8060",
             email = "cmo@maharashtra.gov.in",
             level = "State",
-            activity_tags = json("all"),
-            applicable_states = json("Maharashtra"),
-            applicable_cities = json(""),
+            activity_tags = list("all"),
+            applicable_states = list("Maharashtra"),
+            applicable_cities = list(),
             order = 5
         ),
         Authority(
@@ -80,9 +66,9 @@ object SeededAuthorities {
             phone = "1553",
             email = "pmo@pmindia.gov.in",
             level = "Central",
-            activity_tags = json("all"),
-            applicable_states = json(""),
-            applicable_cities = json(""),
+            activity_tags = list("all"),
+            applicable_states = list(),
+            applicable_cities = list(),
             order = 10
         ),
 
@@ -93,31 +79,31 @@ object SeededAuthorities {
             phone = "+91 20 2612 5003",
             email = "pfc.maharashtra@nic.in",
             level = "State",
-            activity_tags = "deforestation,tree_cutting,illegal_tree_cutting",
-            applicable_states = json("Maharashtra"),
-            applicable_cities = json(""),
+            activity_tags = list("deforestation", "tree_cutting"),
+            applicable_states = list("Maharashtra"),
+            applicable_cities = list(),
             order = 1
         ),
         Authority(
-            id = "maharashtra_wildlife",
-            name = "Wildlife Crime Control Bureau (Maharashtra Unit)",
+            id = "wccb_india",
+            name = "Wildlife Crime Control Bureau",
             phone = "1926",
-            email = "wccb.gov.in",
+            email = "wccb-mowef@nic.in",
             level = "Central",
-            activity_tags = "deforestation,tree_cutting,wildlife",
-            applicable_states = json(""),
-            applicable_cities = json(""),
+            activity_tags = list("deforestation", "tree_cutting", "wildlife"),
+            applicable_states = list(),
+            applicable_cities = list(),
             order = 2
         ),
         Authority(
             id = "moefcc_india",
-            name = "Ministry of Environment, Forest and Climate Change (MoEFCC)",
+            name = "Ministry of Environment, Forest and Climate Change",
             phone = "+91 11 2430 6203",
             email = "moef@gov.in",
             level = "Central",
-            activity_tags = "deforestation,tree_cutting,environment",
-            applicable_states = json(""),
-            applicable_cities = json(""),
+            activity_tags = list("deforestation", "tree_cutting", "sand_mining"),
+            applicable_states = list(),
+            applicable_cities = list(),
             order = 3
         ),
 
@@ -128,9 +114,9 @@ object SeededAuthorities {
             phone = "1800 233 4721",
             email = "dgm.maharashtra@nic.in",
             level = "State",
-            activity_tags = "sand_mining,illegal_sand_mining",
-            applicable_states = json("Maharashtra"),
-            applicable_cities = json(""),
+            activity_tags = list("sand_mining"),
+            applicable_states = list("Maharashtra"),
+            applicable_cities = list(),
             order = 1
         ),
         Authority(
@@ -139,9 +125,9 @@ object SeededAuthorities {
             phone = "+91 22 2433 4456",
             email = "mpcb@maharashtra.gov.in",
             level = "State",
-            activity_tags = "sand_mining,pollution,garbage_dumping",
-            applicable_states = json("Maharashtra"),
-            applicable_cities = json(""),
+            activity_tags = list("sand_mining", "garbage_dumping", "noise_pollution"),
+            applicable_states = list("Maharashtra"),
+            applicable_cities = list(),
             order = 2
         ),
 
@@ -152,9 +138,9 @@ object SeededAuthorities {
             phone = "+91 11 2436 3983",
             email = "cpcb@nic.in",
             level = "Central",
-            activity_tags = "garbage_dumping,pollution",
-            applicable_states = json(""),
-            applicable_cities = json(""),
+            activity_tags = list("garbage_dumping", "noise_pollution", "sand_mining"),
+            applicable_states = list(),
+            applicable_cities = list(),
             order = 1
         ),
 
@@ -165,9 +151,9 @@ object SeededAuthorities {
             phone = "1553",
             email = "trp.maharashtra@nic.in",
             level = "State",
-            activity_tags = "illegal_construction",
-            applicable_states = json("Maharashtra"),
-            applicable_cities = json(""),
+            activity_tags = list("illegal_construction", "encroachment"),
+            applicable_states = list("Maharashtra"),
+            applicable_cities = list(),
             order = 1
         ),
         Authority(
@@ -176,9 +162,9 @@ object SeededAuthorities {
             phone = "+91 20 2612 8574",
             email = "info@rera.maharashtra.gov.in",
             level = "State",
-            activity_tags = "illegal_construction",
-            applicable_states = json("Maharashtra"),
-            applicable_cities = json(""),
+            activity_tags = list("illegal_construction"),
+            applicable_states = list("Maharashtra"),
+            applicable_cities = list(),
             order = 2
         ),
 
@@ -187,11 +173,11 @@ object SeededAuthorities {
             id = "maharashtra_drainage",
             name = "BMC Drainage Dept",
             phone = "15331",
-            email = "drainage@maha.gov.in",
+            email = "drainage@mcgm.gov.in",
             level = "Local",
-            activity_tags = "waterlogging",
-            applicable_states = json("Maharashtra"),
-            applicable_cities = json("mumbai"),
+            activity_tags = list("waterlogging"),
+            applicable_states = list("Maharashtra"),
+            applicable_cities = list("mumbai"),
             order = 1
         ),
         Authority(
@@ -200,9 +186,9 @@ object SeededAuthorities {
             phone = "1553",
             email = "cmrelief@maharashtra.gov.in",
             level = "State",
-            activity_tags = "waterlogging,flood",
-            applicable_states = json("Maharashtra"),
-            applicable_cities = json(""),
+            activity_tags = list("waterlogging"),
+            applicable_states = list("Maharashtra"),
+            applicable_cities = list(),
             order = 2
         ),
 
@@ -213,9 +199,9 @@ object SeededAuthorities {
             phone = "1553",
             email = "revenue.maharashtra@nic.in",
             level = "State",
-            activity_tags = "encroachment",
-            applicable_states = json("Maharashtra"),
-            applicable_cities = json(""),
+            activity_tags = list("encroachment"),
+            applicable_states = list("Maharashtra"),
+            applicable_cities = list(),
             order = 1
         ),
 
@@ -226,28 +212,12 @@ object SeededAuthorities {
             phone = "1912",
             email = "mahavitaran@maha.gov.in",
             level = "State",
-            activity_tags = "street_light",
-            applicable_states = json("Maharashtra"),
-            applicable_cities = json(""),
-            order = 1
-        ),
-
-        // ---------------- Noise Pollution ----------------
-        Authority(
-            id = "maharashtra_noise",
-            name = "Maharashtra Pollution Control Board (Noise)",
-            phone = "+91 22 2433 4456",
-            email = "mpcb@maharashtra.gov.in",
-            level = "State",
-            activity_tags = "noise_pollution",
-            applicable_states = json("Maharashtra"),
-            applicable_cities = json(""),
+            activity_tags = list("street_light"),
+            applicable_states = list("Maharashtra"),
+            applicable_cities = list(),
             order = 1
         )
     )
 
-    private fun json(vararg items: String): String {
-        if (items.isEmpty()) return "[]"
-        return items.joinToString(",", "[", "]") { "\"$it\"" }
-    }
+    private fun list(vararg items: String): String = items.joinToString(",")
 }

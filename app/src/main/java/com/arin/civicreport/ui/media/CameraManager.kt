@@ -1,17 +1,23 @@
 package com.arin.civicreport.ui.media
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
 import android.net.Uri
-import android.os.Build
-import android.provider.MediaStore
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.Preview
-import androidx.camera.core.resolutionselector.ResolutionSelector
-import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
-import androidx.camera.video.*
+import androidx.camera.video.FileOutputOptions
+import androidx.camera.video.PendingRecording
+import androidx.camera.video.Quality
+import androidx.camera.video.QualitySelector
+import androidx.camera.video.Recorder
+import androidx.camera.video.Recording
+import androidx.camera.video.VideoCapture
+import androidx.camera.video.VideoRecordEvent
+import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.lifecycle.LifecycleOwner
@@ -19,128 +25,126 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
 
+/** Small wrapper around CameraX: binds a preview, takes photos and records videos into app storage. */
 class CameraManager(private val context: Context) {
 
-    private var cameraProvider: ProcessCameraProvider? = null
-    private var cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
-    private var preview: Preview? = null
+    private var provider: ProcessCameraProvider? = null
     private var imageCapture: ImageCapture? = null
-    private var videoCapture: VideoCapture<VideoRecorded>? = null
-    private var videoRecording: Recording? = null
-    private val cameraExecutor: ExecutorService = Executors.newSingleThreadExecutor()
-    private val fileProviderAuthority = "${context.packageName}.fileprovider"
+    private var videoCapture: VideoCapture<Recorder>? = null
+    private var recording: Recording? = null
 
-    fun initializeCamera(lifecycleOwner: LifecycleOwner, onReady: () -> Unit) {
+    private fun authority(): String = "${context.packageName}.fileprovider"
+
+    fun bind(
+        lifecycleOwner: LifecycleOwner,
+        previewView: PreviewView,
+        onReady: () -> Unit,
+        onError: (String) -> Unit
+    ) {
         val future = ProcessCameraProvider.getInstance(context)
         future.addListener({
             try {
-                cameraProvider = future.get()
-                val selector = ResolutionSelector.Builder()
-                    .setResolutionStrategy(
-                        ResolutionStrategy(
-                            ResolutionStrategy.FROM_HIGHEST_SUPPORTED_CLASS,
-                            ResolutionStrategy.FROM_BACKWARD_COMPATIBLE
-                        )
-                    )
+                val cameraProvider = future.get()
+                provider = cameraProvider
+
+                val preview = Preview.Builder().build()
+                preview.surfaceProvider = previewView.surfaceProvider
+
+                val capture = ImageCapture.Builder()
+                    .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
                     .build()
 
-                preview = Preview.Builder().setResolutionSelector(selector).build()
-                imageCapture = ImageCapture.Builder().build()
-                videoCapture = VideoCapture.withOutput(
-                    FileOutputOptions.Builder(context.cacheDir).setFileName("civic_report.mp4").build()
-                )
+                val recorder = Recorder.Builder()
+                    .setQualitySelector(QualitySelector.from(Quality.HD))
+                    .build()
+                val video = VideoCapture.withOutput(recorder)
 
-                cameraProvider?.unbindAll()
-                cameraProvider?.bindToLifecycle(lifecycleOwner, cameraSelector, preview!!, imageCapture!!, videoCapture)
+                imageCapture = capture
+                videoCapture = video
+
+                cameraProvider.unbindAll()
+                cameraProvider.bindToLifecycle(
+                    lifecycleOwner,
+                    CameraSelector.DEFAULT_BACK_CAMERA,
+                    preview,
+                    capture,
+                    video
+                )
                 onReady()
             } catch (e: Exception) {
-                e.printStackTrace()
+                onError(e.message ?: "Camera could not be started")
             }
         }, ContextCompat.getMainExecutor(context))
     }
 
-    fun takePhoto(previewView: androidx.camera.view.PreviewView, onImage: (Uri) -> Unit, onError: (String) -> Unit) {
-        val file = getPhotoFile()
-        val output = ImageCapture.OutputFileOptions.Builder(file).build()
-        imageCapture?.takePicture(
-            output, cameraExecutor,
-            object : ImageCapture.OnImageSavedCallback() {
-                override fun onImageSaved(output: ImageCapture.OutputFileResults) {
-                    val uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        MediaStoreHelper.saveToMediaStore(context, file, MediaStoreHelper.MediaKind.Photo)
-                    } else {
-                        Uri.fromFile(file)
-                    }
-                    onImage(uri)
+    fun takePhoto(onSaved: (Uri) -> Unit, onError: (String) -> Unit) {
+        val capture = imageCapture
+        if (capture == null) {
+            onError("Camera is not ready")
+            return
+        }
+        val file = newFile("jpg")
+        val options = ImageCapture.OutputFileOptions.Builder(file).build()
+        capture.takePicture(
+            options,
+            ContextCompat.getMainExecutor(context),
+            object : ImageCapture.OnImageSavedCallback {
+                override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
+                    onSaved(FileProvider.getUriForFile(context, authority(), file))
                 }
 
                 override fun onError(exception: ImageCaptureException) {
-                    onError(exception.message ?: "Capture failed")
+                    onError(exception.message ?: "Photo capture failed")
                 }
             }
         )
     }
 
-    fun startVideo(previewView: androidx.camera.view.PreviewView, onVideoReady: (Uri) -> Unit, onError: (String) -> Unit) {
-        val name = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US).format(Date()) + "_record.mp4"
-        val contentValues = android.content.ContentValues().apply {
-            put(MediaStore.Video.Media.DISPLAY_NAME, name)
-            put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
-            put(MediaStore.Video.Media.RELATIVE_PATH, "CivicReport/recorded")
-        }
-        val contentUri = context.contentResolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, contentValues)
-        if (contentUri == null) {
-            onError("Could not create video output")
+    fun startRecording(onFinished: (Uri) -> Unit, onError: (String) -> Unit) {
+        val video = videoCapture
+        if (video == null) {
+            onError("Camera is not ready")
             return
         }
-        val output = FileOutputOptions.Builder(context.cacheDir)
-            .setFileName(contentUri.lastPathSegment ?: name)
-            .build()
-        videoCapture = VideoCapture.withOutput(output)
-
-        val surfaceProvider = previewView.surfaceProvider
-        preview?.setSurfaceProvider(surfaceProvider)
-
-        videoRecording = videoCapture?.prepareRecording(context, output)
-            .apply {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                    setQualitySelector(QualitySelector.from(androidx.camera.video.Quality.HD))
+        val file = newFile("mp4")
+        val options = FileOutputOptions.Builder(file).build()
+        var pending: PendingRecording = video.output.prepareRecording(context, options)
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            pending = pending.withAudioEnabled()
+        }
+        recording = pending.start(ContextCompat.getMainExecutor(context)) { event ->
+            if (event is VideoRecordEvent.Finalize) {
+                recording = null
+                if (event.hasError()) {
+                    onError("Recording failed (code ${event.error})")
+                } else {
+                    onFinished(FileProvider.getUriForFile(context, authority(), file))
                 }
             }
-            .execute(ContextCompat.getMainExecutor(context))
-        onVideoReady(contentUri)
-    }
-
-    fun stopVideo(previewView: androidx.camera.view.PreviewView, onVideoStop: (Uri?) -> Unit, onError: (String) -> Unit) {
-        videoRecording?.stop()
-        videoRecording = null
-        previewView?.surfaceProvider?.setSurfaceProvider(null)
-        onVideoStop(contentUriFromRecording(videoCapture, previewView))
-    }
-
-    private fun contentUriFromRecording(videoCapture: VideoCapture<VideoRecorded>?, previewView: androidx.camera.view.PreviewView?): Uri? {
-        val result = videoCapture?.output?.await() ?: return previewView?.savedVideo?.video?.uri
-        return result.savedFile?.absolutePath?.let { Uri.fromFile(File(it)) }
-            ?: result.savedVideo?.video?.uri
-    }
-
-    fun releaseCamera() {
-        preview?.let {
-            it.setSurfaceProvider(null)
         }
-        videoRecording?.stop()
-        videoCapture = null
-        videoRecording = null
-        cameraProvider?.unbindAll()
-        cameraProvider = null
     }
 
-    private fun getPhotoFile(): File {
-        val dir = File(context.externalFilesDir("media") ?: context.filesDir, "media").also { it.mkdirs() }
-        val name = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US).format(Date()) + "_capture.jpg"
-        return File(dir, name)
+    fun stopRecording() {
+        recording?.stop()
+        recording = null
+    }
+
+    fun release() {
+        recording?.stop()
+        recording = null
+        imageCapture = null
+        videoCapture = null
+        provider?.unbindAll()
+        provider = null
+    }
+
+    private fun newFile(extension: String): File {
+        val dir = File(context.getExternalFilesDir("media") ?: File(context.filesDir, "media").also { it.mkdirs() }, "")
+        dir.mkdirs()
+        val stamp = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US).format(Date())
+        return File(dir, "report_$stamp.$extension")
     }
 }

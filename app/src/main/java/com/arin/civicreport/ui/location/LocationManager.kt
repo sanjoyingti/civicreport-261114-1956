@@ -9,104 +9,87 @@ import androidx.core.content.ContextCompat
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.flow.asStateFlow
+import java.util.Locale
+import kotlin.coroutines.resume
 
 data class CurrentLocation(
-    val latitude: Double, val longitude: Double,
-    val address: String, val city: String, val district: String,
-    val state: String, val pincode: String
-)
-
-data class GeoPoint(
     val latitude: Double,
-    val longitude: Double
-)
-
-class LocationManager(private val context: Context) {
-    private val fusedClient: FusedLocationProviderClient =
-        LocationServices.getFusedLocationProviderClient(context)
-    private val geocoder = Geocoder(context, java.util.Locale.getDefault())
-
-    private val _state = MutableStateFlow<LocationState>(LocationState.Idle)
-    val state: StateFlow<LocationState> = _state.asStateFlow()
-
-    sealed class LocationState {
-        object Idle : LocationState()
-        data class Loading(val message: String) : LocationState()
-        data class Ready(val loc: CurrentLocation) : LocationState()
-        data class Error(val message: String) : LocationState()
-    }
-
-    private fun setAddress(addr: Address?): CurrentLocation {
-        val addressText = addr?.getAddressLine(0) ?: ""
-        return CurrentLocation(
-            addr?.latitude ?: 0.0, addr?.longitude ?: 0.0,
-            addressText,
-            addr?.locality ?: "", addr?.adminArea ?: "",
-            addr?.countryName ?: "", addr?.postalCode ?: ""
-        )
-    }
-
-    fun hasFineLocation(): Boolean =
-        ContextCompat.checkSelfPermission(
-            context, Manifest.permission.ACCESS_FINE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED
-
-    fun hasCoarseLocation(): Boolean =
-        ContextCompat.checkSelfPermission(
-            context, Manifest.permission.ACCESS_COARSE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED
-
-    suspend fun getCurrentLocation(): CurrentLocation = withContext(Dispatchers.IO) {
-        _state.value = LocationState.Loading("Getting your location...")
-        val hasFine = hasFineLocation()
-        val hasCoarse = hasCoarseLocation()
-
-        if (!hasFine && !hasCoarse) {
-            _state.value = LocationState.Error("Location permission denied. Tap the map to place a pin manually.")
-            return@withContext CurrentLocation(0.0, 0.0, "", "", "", "", "")
-        }
-
-        try {
-            val location = getSingleLocation(fusedClient)
-
-            if (location == null) {
-                _state.value = LocationState.Error("No GPS signal. Tap the map to place a pin manually.")
-                return@withContext CurrentLocation(0.0, 0.0, "", "", "", "", "")
-            }
-
-            _state.value = LocationState.Loading("Finding your address...")
-            val addr = try {
-                geocoder.getFromLocation(location.latitude, location.longitude, 1)?.firstOrNull()
-            } catch (e: Exception) { null }
-            val resolvedLoc = setAddress(addr)
-            _state.value = LocationState.Ready(resolvedLoc)
-            resolvedLoc
-        } catch (e: Exception) {
-            _state.value = LocationState.Error("Could not get location. Tap the map to place a pin manually.")
-            CurrentLocation(0.0, 0.0, "", "", "", "", "")
-        }
-    }
-
-    suspend fun reverseGeocode(latitude: Double, longitude: Double): CurrentLocation = withContext(Dispatchers.IO) {
-        _state.value = LocationState.Loading("Finding your address...")
-        val addr = try {
-            geocoder.getFromLocation(latitude, longitude, 1)?.firstOrNull()
-        } catch (e: Exception) { null }
-        val resolved = setAddress(addr)
-        _state.value = LocationState.Ready(resolved)
-        resolved
-    }
+    val longitude: Double,
+    val address: String,
+    val city: String,
+    val district: String,
+    val state: String,
+    val pincode: String
+) {
+    val hasFix: Boolean get() = latitude != 0.0 || longitude != 0.0
 }
 
-private suspend fun getSingleLocation(client: FusedLocationProviderClient): android.location.Location? {
-    return try {
-        val locTask = client.lastLocation
-        locTask.await()
-    } catch (e: Exception) {
-        null
+data class GeoPoint(val latitude: Double, val longitude: Double)
+
+class LocationManager(private val context: Context) {
+
+    private val fusedClient: FusedLocationProviderClient =
+        LocationServices.getFusedLocationProviderClient(context)
+    private val geocoder = Geocoder(context, Locale.getDefault())
+
+    fun hasFineLocation(): Boolean = ContextCompat.checkSelfPermission(
+        context, Manifest.permission.ACCESS_FINE_LOCATION
+    ) == PackageManager.PERMISSION_GRANTED
+
+    fun hasCoarseLocation(): Boolean = ContextCompat.checkSelfPermission(
+        context, Manifest.permission.ACCESS_COARSE_LOCATION
+    ) == PackageManager.PERMISSION_GRANTED
+
+    fun hasLocationPermission(): Boolean = hasFineLocation() || hasCoarseLocation()
+
+    suspend fun getCurrentLocation(): CurrentLocation = withContext(Dispatchers.IO) {
+        if (!hasLocationPermission()) return@withContext empty()
+        val location = try {
+            lastKnownLocation()
+        } catch (e: SecurityException) {
+            null
+        } ?: return@withContext empty()
+        reverseGeocode(location.latitude, location.longitude)
     }
+
+    suspend fun reverseGeocode(latitude: Double, longitude: Double): CurrentLocation =
+        withContext(Dispatchers.IO) {
+            val address = try {
+                @Suppress("DEPRECATION")
+                geocoder.getFromLocation(latitude, longitude, 1)?.firstOrNull()
+            } catch (e: Exception) {
+                null
+            }
+            toLocation(latitude, longitude, address)
+        }
+
+    private fun toLocation(latitude: Double, longitude: Double, address: Address?): CurrentLocation =
+        CurrentLocation(
+            latitude = latitude,
+            longitude = longitude,
+            address = address?.getAddressLine(0) ?: "%.6f, %.6f".format(latitude, longitude),
+            city = address?.locality ?: address?.subAdminArea ?: "",
+            district = address?.subAdminArea ?: "",
+            state = address?.adminArea ?: "",
+            pincode = address?.postalCode ?: ""
+        )
+
+    private fun empty(): CurrentLocation = CurrentLocation(0.0, 0.0, "", "", "", "", "")
+
+    private suspend fun lastKnownLocation(): android.location.Location? =
+        suspendCancellableCoroutine { continuation ->
+            try {
+                fusedClient.lastLocation
+                    .addOnSuccessListener { location ->
+                        if (continuation.isActive) continuation.resume(location)
+                    }
+                    .addOnFailureListener {
+                        if (continuation.isActive) continuation.resume(null)
+                    }
+            } catch (e: Exception) {
+                if (continuation.isActive) continuation.resume(null)
+            }
+        }
 }

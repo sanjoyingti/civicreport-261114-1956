@@ -7,84 +7,76 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
-import android.os.Environment
 import android.provider.Settings
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 
 class PermissionManager(private val activity: Activity) {
 
-    private val cameraLauncher = ActivityResultContracts.RequestPermission()
-    private val locationLauncher = ActivityResultContracts.RequestMultiplePermissions()
-    private val smsLauncher = ActivityResultContracts.RequestPermission()
-    private val notificationsLauncher = ActivityResultContracts.RequestPermission()
+    private val singleLauncher = activity.registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { }
 
-    fun hasCamera(context: Context): Boolean =
-        ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+    private val locationLauncher = activity.registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { }
+
+    fun hasPermission(context: Context, permission: String): Boolean =
+        ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
+
+    fun hasCamera(context: Context): Boolean = hasPermission(context, Manifest.permission.CAMERA)
+
+    fun hasAudio(context: Context): Boolean = hasPermission(context, Manifest.permission.RECORD_AUDIO)
 
     fun hasFineLocation(context: Context): Boolean =
-        ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        hasPermission(context, Manifest.permission.ACCESS_FINE_LOCATION)
 
     fun hasCoarseLocation(context: Context): Boolean =
-        ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        hasPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION)
 
     fun hasReadMedia(context: Context): Boolean =
-        ContextCompat.checkSelfPermission(context, Manifest.permission.READ_MEDIA_IMAGES) == PackageManager.PERMISSION_GRANTED &&
-                ContextCompat.checkSelfPermission(context, Manifest.permission.READ_MEDIA_VIDEO) == PackageManager.PERMISSION_GRANTED
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            hasPermission(context, Manifest.permission.READ_MEDIA_IMAGES) &&
+                hasPermission(context, Manifest.permission.READ_MEDIA_VIDEO)
+        } else {
+            hasPermission(context, Manifest.permission.READ_EXTERNAL_STORAGE)
+        }
 
-    fun hasReadMediaForLegacy(context: Context): Boolean =
-        ContextCompat.checkSelfPermission(context, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
-
-    fun hasSendSms(context: Context): Boolean =
-        ContextCompat.checkSelfPermission(context, Manifest.permission.SEND_SMS) == PackageManager.PERMISSION_GRANTED
-
-    fun hasCallPhone(context: Context): Boolean =
-        ContextCompat.checkSelfPermission(context, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED
-
-    fun hasPostNotifications(context: Context): Boolean =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
-            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
-        else true
+    fun hasSendSms(context: Context): Boolean = hasPermission(context, Manifest.permission.SEND_SMS)
 
     fun requestCameraPermission() {
-        cameraLauncher.launch(Manifest.permission.CAMERA)
+        singleLauncher.launch(Manifest.permission.CAMERA)
     }
 
-    fun requestLocationPermissions() {
-        val perms = mutableListOf<String>()
-        if (hasFineLocation(activity)) perms.add(Manifest.permission.ACCESS_FINE_LOCATION)
-        if (!hasCoarseLocation(activity)) perms.add(Manifest.permission.ACCESS_COARSE_LOCATION)
-        if (perms.isNotEmpty()) locationLauncher.launch(perms.toTypedArray())
+    fun requestAudioPermission() {
+        singleLauncher.launch(Manifest.permission.RECORD_AUDIO)
     }
 
     fun requestSmsPermission() {
-        smsLauncher.launch(Manifest.permission.SEND_SMS)
+        singleLauncher.launch(Manifest.permission.SEND_SMS)
     }
 
     fun requestNotificationsPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            notificationsLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            singleLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
+    }
+
+    fun requestLocationPermissions() {
+        val permissions = mutableListOf<String>()
+        if (!hasFineLocation(activity)) permissions.add(Manifest.permission.ACCESS_FINE_LOCATION)
+        if (!hasCoarseLocation(activity)) permissions.add(Manifest.permission.ACCESS_COARSE_LOCATION)
+        if (permissions.isNotEmpty()) locationLauncher.launch(permissions.toTypedArray())
     }
 
     fun requestPermission(permission: String) {
         when (permission) {
             Manifest.permission.CAMERA -> requestCameraPermission()
+            Manifest.permission.RECORD_AUDIO -> requestAudioPermission()
             Manifest.permission.SEND_SMS -> requestSmsPermission()
             Manifest.permission.POST_NOTIFICATIONS -> requestNotificationsPermission()
             else -> requestLocationPermissions()
         }
-    }
-
-    fun launchRationaleOrRequest(context: Context, permission: String, rationale: String) {
-        val activity = context as? Activity ?: return
-        if (hasPermission(context, permission)) return
-        android.app.AlertDialog.Builder(activity)
-            .setTitle("Permission needed")
-            .setMessage(rationale)
-            .setPositiveButton("Grant") { _, _ -> requestPermission(permission) }
-            .setNegativeButton("Cancel", null)
-            .show()
     }
 
     fun openAppSettings(context: Context) {
@@ -93,7 +85,4 @@ class PermissionManager(private val activity: Activity) {
         }
         context.startActivity(intent)
     }
-
-    private fun hasPermission(context: Context, permission: String): Boolean =
-        ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
 }
