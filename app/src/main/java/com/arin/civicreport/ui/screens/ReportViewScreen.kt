@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -168,7 +169,11 @@ fun ReportViewScreen(
                 Text("Method: ${current.sendMethod}", style = MaterialTheme.typography.bodySmall)
             }
             Spacer(modifier = Modifier.height(12.dp))
-            Text("Notified offices", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(
+                "Notified offices",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
             if (authorities.isEmpty()) {
                 Text(
                     current.sentAuthorities.joinToString(", ").ifBlank { "None recorded" },
@@ -192,18 +197,20 @@ fun ReportViewScreen(
                     val targets = authorities
                     if (targets.isEmpty()) {
                         notice = "No saved contacts for this report, so nothing could be resent."
-                    } else {
-                        permissionManager.requestNotificationsPermission()
-                        ReportSender.send(context, targets, current, current.sendMethod)
-                        notice = "Complaint re-opened in email/SMS for the same offices."
-                        scope.launch {
-                            repo.updateStatus(current.id, current.status)
-                        }
+                        return@TextButton
+                    }
+                    if (current.sendMethod != "email" && !permissionManager.hasSendSms(context)) {
+                        permissionManager.requestSmsPermission()
+                    }
+                    ReportSender.resend(context, targets, current)
+                    notice = "Complaint re-opened in email/SMS for the same offices."
+                    scope.launch {
+                        repo.updateStatus(current.id, current.status)
                     }
                 }
             ) {
                 Icon(Icons.Filled.Send, contentDescription = null)
-                Spacer(modifier = Modifier.height(0.dp))
+                Spacer(modifier = Modifier.width(8.dp))
                 Text("Resend to same offices")
             }
         }

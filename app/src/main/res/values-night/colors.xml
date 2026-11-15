@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="background">#FF1A1C18</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="black">#FF000000</color>
+    <color name="window_background">#FF1A1C18</color>
+    <color name="brand_green">#FFA8D7A8</color>
 </resources>

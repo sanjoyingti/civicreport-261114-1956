@@ -47,6 +47,7 @@ import com.arin.civicreport.model.IncidentType
 import com.arin.civicreport.model.Report
 import com.arin.civicreport.ui.screens.report.ReportFlowViewModel
 import com.arin.civicreport.ui.util.NetworkChecker
+import com.arin.civicreport.ui.util.PermissionManager
 import com.arin.civicreport.ui.util.Prefs
 import com.arin.civicreport.ui.util.ReportSender
 import kotlinx.coroutines.launch
@@ -56,6 +57,7 @@ import kotlinx.coroutines.launch
 fun ReviewAndSendScreen(
     repo: Repository,
     prefs: Prefs,
+    permissionManager: PermissionManager,
     reportViewModel: ReportFlowViewModel,
     onBack: () -> Unit,
     onSent: (Long) -> Unit
@@ -151,7 +153,11 @@ fun ReviewAndSendScreen(
             }
 
             Spacer(modifier = Modifier.height(12.dp))
-            Text("Contact method", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(
+                "Contact method",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 MethodChip(method == "email", "Email") { method = "email"; prefs.defaultSendMethod = "email" }
                 MethodChip(method == "sms", "SMS") { method = "sms"; prefs.defaultSendMethod = "sms" }
@@ -177,6 +183,9 @@ fun ReviewAndSendScreen(
             Button(
                 onClick = {
                     if (chosen.isEmpty() || sending) return@Button
+                    if (method != "email" && !permissionManager.hasSendSms(context)) {
+                        permissionManager.requestSmsPermission()
+                    }
                     sending = true
                     scope.launch {
                         val now = System.currentTimeMillis()

@@ -93,6 +93,7 @@ fun AppNavigation(
             ReviewAndSendScreen(
                 repo = repo,
                 prefs = prefs,
+                permissionManager = permissionManager,
                 reportViewModel = reportViewModel,
                 onBack = { navController.popBackStack() },
                 onSent = { id ->

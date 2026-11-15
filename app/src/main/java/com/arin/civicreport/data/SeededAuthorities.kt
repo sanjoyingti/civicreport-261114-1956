@@ -60,16 +60,62 @@ object SeededAuthorities {
             applicable_cities = list(),
             order = 5
         ),
+
+        // ---------------- Assam: Pothole / Road ----------------
         Authority(
-            id = "pmo_india",
-            name = "Prime Minister's Office (PMO)",
-            phone = "1553",
-            email = "pmo@pmindia.gov.in",
-            level = "Central",
+            id = "assam_nagaon_pwd",
+            name = "Nagaon PWD Division (Roads)",
+            phone = "+91 3672 232 405",
+            email = "ce.pwd.assam@gov.in",
+            level = "Local",
+            activity_tags = list("pothole", "bad_road", "road_defect", "waterlogging"),
+            applicable_states = list("Assam"),
+            applicable_cities = list("duarbagori", "nagaon", "nowgong"),
+            order = 1
+        ),
+        Authority(
+            id = "assam_nagaon_board",
+            name = "Nagaon Municipal Board",
+            phone = "+91 3672 233 415",
+            email = "nmb-assam@nic.in",
+            level = "Local",
+            activity_tags = list("pothole", "garbage_dumping", "waterlogging", "encroachment", "illegal_construction", "street_light"),
+            applicable_states = list("Assam"),
+            applicable_cities = list("duarbagori", "nagaon"),
+            order = 2
+        ),
+        Authority(
+            id = "assam_nagaon_dc",
+            name = "Deputy Commissioner, Nagaon",
+            phone = "+91 3672 232 451",
+            email = "dc-nagaon@nic.in",
+            level = "Local",
             activity_tags = list("all"),
-            applicable_states = list(),
+            applicable_states = list("Assam"),
+            applicable_cities = list("duarbagori", "nagaon"),
+            order = 3
+        ),
+        Authority(
+            id = "assam_pwd_state",
+            name = "PWD Assam (State)",
+            phone = "+91 361 223 7129",
+            email = "secy-pwd@assam.gov.in",
+            level = "State",
+            activity_tags = list("pothole", "bad_road", "road_defect"),
+            applicable_states = list("Assam"),
             applicable_cities = list(),
-            order = 10
+            order = 4
+        ),
+        Authority(
+            id = "assam_cm_office",
+            name = "Chief Minister Office, Assam",
+            phone = "+91 361 226 1333",
+            email = "cmo-assam@gov.in",
+            level = "State",
+            activity_tags = list("all"),
+            applicable_states = list("Assam"),
+            applicable_cities = list(),
+            order = 5
         ),
 
         // ---------------- Deforestation ----------------
@@ -83,6 +129,28 @@ object SeededAuthorities {
             applicable_states = list("Maharashtra"),
             applicable_cities = list(),
             order = 1
+        ),
+        Authority(
+            id = "assam_forest",
+            name = "Assam Forest Department",
+            phone = "+91 361 226 3063",
+            email = "pccf-assam@nic.in",
+            level = "State",
+            activity_tags = list("deforestation", "tree_cutting", "wildlife"),
+            applicable_states = list("Assam"),
+            applicable_cities = list(),
+            order = 1
+        ),
+        Authority(
+            id = "assam_nagaon_forest",
+            name = "Nagaon Forest Division",
+            phone = "+91 3672 232 542",
+            email = "dfo-nagaon@nic.in",
+            level = "Local",
+            activity_tags = list("deforestation", "tree_cutting", "wildlife"),
+            applicable_states = list("Assam"),
+            applicable_cities = list("duarbagori", "nagaon"),
+            order = 0
         ),
         Authority(
             id = "wccb_india",
@@ -130,6 +198,28 @@ object SeededAuthorities {
             applicable_cities = list(),
             order = 2
         ),
+        Authority(
+            id = "assam_mines",
+            name = "Directorate of Geology & Mining, Assam",
+            phone = "+91 361 223 7439",
+            email = "dgm-assam@nic.in",
+            level = "State",
+            activity_tags = list("sand_mining"),
+            applicable_states = list("Assam"),
+            applicable_cities = list(),
+            order = 1
+        ),
+        Authority(
+            id = "assam_pollution",
+            name = "Assam Pollution Control Board",
+            phone = "+91 361 233 7221",
+            email = "pcb-assam@nic.in",
+            level = "State",
+            activity_tags = list("sand_mining", "garbage_dumping", "noise_pollution"),
+            applicable_states = list("Assam"),
+            applicable_cities = list(),
+            order = 2
+        ),
 
         // ---------------- Garbage Dumping / Pollution ----------------
         Authority(
@@ -167,6 +257,17 @@ object SeededAuthorities {
             applicable_cities = list(),
             order = 2
         ),
+        Authority(
+            id = "assam_tp",
+            name = "Town & Country Planning, Assam",
+            phone = "+91 361 223 7259",
+            email = "tcp-assam@nic.in",
+            level = "State",
+            activity_tags = list("illegal_construction", "encroachment"),
+            applicable_states = list("Assam"),
+            applicable_cities = list(),
+            order = 1
+        ),
 
         // ---------------- Waterlogging ----------------
         Authority(
@@ -191,6 +292,17 @@ object SeededAuthorities {
             applicable_cities = list(),
             order = 2
         ),
+        Authority(
+            id = "assam_relief",
+            name = "Assam State Disaster Management Authority",
+            phone = "1079",
+            email = "asdma-assam@nic.in",
+            level = "State",
+            activity_tags = list("waterlogging"),
+            applicable_states = list("Assam"),
+            applicable_cities = list(),
+            order = 1
+        ),
 
         // ---------------- Encroachment ----------------
         Authority(
@@ -201,6 +313,17 @@ object SeededAuthorities {
             level = "State",
             activity_tags = list("encroachment"),
             applicable_states = list("Maharashtra"),
+            applicable_cities = list(),
+            order = 1
+        ),
+        Authority(
+            id = "assam_revenue",
+            name = "Assam Revenue Department",
+            phone = "+91 361 223 7172",
+            email = "revenue-assam@nic.in",
+            level = "State",
+            activity_tags = list("encroachment"),
+            applicable_states = list("Assam"),
             applicable_cities = list(),
             order = 1
         ),
@@ -216,6 +339,63 @@ object SeededAuthorities {
             applicable_states = list("Maharashtra"),
             applicable_cities = list(),
             order = 1
+        ),
+        Authority(
+            id = "assam_electric",
+            name = "APDCL (Assam Power Distribution)",
+            phone = "1912",
+            email = "apdcl@apdcl.org",
+            level = "State",
+            activity_tags = list("street_light"),
+            applicable_states = list("Assam"),
+            applicable_cities = list(),
+            order = 1
+        ),
+        Authority(
+            id = "assam_pollution_noise",
+            name = "Assam Noise Pollution Cell",
+            phone = "155300",
+            email = "pcb-assam@nic.in",
+            level = "State",
+            activity_tags = list("noise_pollution"),
+            applicable_states = list("Assam"),
+            applicable_cities = list(),
+            order = 3
+        ),
+
+        // ---------------- National offices ----------------
+        Authority(
+            id = "pmo_india",
+            name = "Prime Minister's Office (PMO)",
+            phone = "1553",
+            email = "pmo@pmindia.gov.in",
+            level = "Central",
+            activity_tags = list("all"),
+            applicable_states = list(),
+            applicable_cities = list(),
+            order = 10
+        ),
+        Authority(
+            id = "cpgrm_india",
+            name = "CPGRAMS (Central Grievance Portal)",
+            phone = "1800 11 1555",
+            email = "grievance@pmo.gov.in",
+            level = "Central",
+            activity_tags = list("all"),
+            applicable_states = list(),
+            applicable_cities = list(),
+            order = 11
+        ),
+        Authority(
+            id = "niti_grievance",
+            name = "NITI Aayog Citizen Grievance",
+            phone = "+91 11 2309 6700",
+            email = "grievance-niti@gov.in",
+            level = "Central",
+            activity_tags = list("all"),
+            applicable_states = list(),
+            applicable_cities = list(),
+            order = 12
         )
     )
 

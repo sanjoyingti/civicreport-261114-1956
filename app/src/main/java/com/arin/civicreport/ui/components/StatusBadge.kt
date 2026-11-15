@@ -13,42 +13,65 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.arin.civicreport.model.IncidentStatus
 
-/** Small rounded label showing a report's status with theme-aware colours. */
+/** Small rounded label showing a report's status. */
 @Composable
 fun StatusBadge(status: IncidentStatus) {
-    val colours = MaterialTheme.colorScheme
-    val label: String
-    val container: Color
-    val content: Color
-    when (status) {
-        IncidentStatus.Sent -> {
-            label = "Sent"
-            container = colours.primaryContainer
-            content = colours.onPrimaryContainer
-        }
-        IncidentStatus.Pending -> {
-            label = "Pending"
-            container = colours.secondaryContainer
-            content = colours.onSecondaryContainer
-        }
-        IncidentStatus.Failed -> {
-            label = "Failed"
-            container = colours.errorContainer
-            content = colours.onErrorContainer
-        }
-        IncidentStatus.Draft -> {
-            label = "Draft"
-            container = colours.surfaceVariant
-            content = colours.onSurfaceVariant
-        }
+    val (label, background, foreground) = when (status) {
+        IncidentStatus.Sent -> Triple(
+            "Sent",
+            MaterialTheme.colorScheme.primaryContainer,
+            MaterialTheme.colorScheme.onPrimaryContainer
+        )
+        IncidentStatus.Pending -> Triple(
+            "Pending",
+            MaterialTheme.colorScheme.tertiaryContainer,
+            MaterialTheme.colorScheme.onTertiaryContainer
+        )
+        IncidentStatus.Failed -> Triple(
+            "Failed",
+            MaterialTheme.colorScheme.errorContainer,
+            MaterialTheme.colorScheme.onErrorContainer
+        )
+        IncidentStatus.Draft -> Triple(
+            "Draft",
+            MaterialTheme.colorScheme.surfaceVariant,
+            MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
     Text(
         text = label,
+        color = foreground,
+        fontWeight = FontWeight.Bold,
+        fontSize = 12.sp,
         modifier = Modifier
-            .background(container, RoundedCornerShape(8.dp))
-            .padding(horizontal = 8.dp, vertical = 2.dp),
-        color = content,
-        fontSize = 11.sp,
-        fontWeight = FontWeight.Bold
+            .background(background, RoundedCornerShape(50))
+            .padding(horizontal = 10.dp, vertical = 4.dp)
     )
+}
+
+/** Simple badge for plain text status names coming from older saved rows. */
+@Composable
+fun StatusBadge(statusName: String) {
+    val parsed = runCatching { IncidentStatus.valueOf(statusName) }.getOrDefault(IncidentStatus.Draft)
+    if (statusName == parsed.name) {
+        StatusBadge(parsed)
+    } else {
+        Text(
+            text = statusName,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = FontWeight.Bold,
+            fontSize = 12.sp,
+            modifier = Modifier
+                .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(50))
+                .padding(horizontal = 10.dp, vertical = 4.dp)
+        )
+    }
+}
+
+/** Colour helper used by the map legend and the review screen. */
+fun statusColor(status: IncidentStatus): Color = when (status) {
+    IncidentStatus.Sent -> Color(0xFF206039)
+    IncidentStatus.Pending -> Color(0xFF6750A4)
+    IncidentStatus.Failed -> Color(0xFFB3261E)
+    IncidentStatus.Draft -> Color(0xFF79747E)
 }
