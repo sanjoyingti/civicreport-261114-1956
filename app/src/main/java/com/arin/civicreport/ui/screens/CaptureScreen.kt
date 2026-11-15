@@ -1,6 +1,7 @@
 package com.arin.civicreport.ui.screens
 
 import android.Manifest
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.view.PreviewView
@@ -8,7 +9,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -89,6 +89,9 @@ fun CaptureScreen(
     val audioPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { }
+    val mediaLocationLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { }
     val galleryLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent()
     ) { uri ->
@@ -97,7 +100,7 @@ fun CaptureScreen(
         val isVideo = mime.startsWith("video")
         reportViewModel.setMedia(uri.toString(), if (isVideo) "video" else "photo")
         val gps = if (!isVideo) GalleryManager.extractExifGPS(context, uri) else null
-        if (gps != null) {
+        if (gps != null && (gps.first != 0.0 || gps.second != 0.0)) {
             scope.launch {
                 val loc = locationManager.reverseGeocode(gps.first, gps.second)
                 reportViewModel.setLocation(
@@ -109,6 +112,15 @@ fun CaptureScreen(
         } else {
             onCaptured()
         }
+    }
+
+    fun openGallery(mime: String) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
+            !permissionManager.hasPermission(context, Manifest.permission.ACCESS_MEDIA_LOCATION)
+        ) {
+            mediaLocationLauncher.launch(Manifest.permission.ACCESS_MEDIA_LOCATION)
+        }
+        galleryLauncher.launch(mime)
     }
 
     DisposableEffect(Unit) {
@@ -262,7 +274,7 @@ fun CaptureScreen(
                 Text(if (recording) "Stop recording" else "Record video")
             }
             OutlinedButton(
-                onClick = { galleryLauncher.launch("image/*") },
+                onClick = { openGallery("image/*") },
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Icon(Icons.Filled.PhotoLibrary, contentDescription = null)
@@ -270,7 +282,7 @@ fun CaptureScreen(
                 Text("Photo from gallery")
             }
             OutlinedButton(
-                onClick = { galleryLauncher.launch("video/*") },
+                onClick = { openGallery("video/*") },
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Icon(Icons.Filled.PhotoLibrary, contentDescription = null)
