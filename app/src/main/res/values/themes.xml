@@ -1,10 +1,11 @@
+=== ABOUT: Replaced the missing Material 3 theme parent with a built-in Android theme, so the app's resources link again ===
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.CivicReport" parent="Theme.AppCompat.DayNight.NoActionBar">
+    <style name="Theme.CivicReport" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowBackground">@color/background</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
-        <item name="windowActionBar">false</item>
-        <item name="windowNoTitle">true</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
     </style>
 </resources>

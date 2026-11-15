@@ -1,27 +1,53 @@
+=== ABOUT: The report detail screen, rewritten so its parameters match how the app opens it and every import exists ===
 package com.arin.civicreport.ui.screens
 
-import android.content.Intent
-import android.net.Uri
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Send
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.arin.civicreport.data.Repository
-import com.arin.civicreport.model.Authority as AuthorityModel
-import com.arin.civicreport.model.IncidentStatus
-import com.arin.civicreport.ui.util.Prefs
+import com.arin.civicreport.model.Authority
+import com.arin.civicreport.model.IncidentType
+import com.arin.civicreport.model.Report
+import com.arin.civicreport.ui.components.StatusBadge
+import com.arin.civicreport.ui.components.formatDate
 import com.arin.civicreport.ui.util.PermissionManager
+import com.arin.civicreport.ui.util.Prefs
+import com.arin.civicreport.ui.util.ReportSender
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -30,190 +56,168 @@ fun ReportViewScreen(
     reportId: Long,
     repo: Repository,
     prefs: Prefs,
-    onOpenSettings: () -> Unit,
+    permissionManager: PermissionManager,
     onBack: () -> Unit,
-    permissionManager: PermissionManager
+    onDeleted: () -> Unit
 ) {
-    val report = repo.getReports().collectAsState(initial = emptyList()).value.firstOrNull { it.id == reportId }
-        ?: run {
-            LaunchedEffect(Unit) { onBack() }
-            return@Composable {}
-        }
-    val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    var showMenu by remember { mutableStateOf(false) }
-    var sending by remember { mutableStateOf(false) }
-    var showResendConfirm by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val reports by repo.getReports().collectAsState(initial = emptyList())
+    val report = reports.firstOrNull { it.id == reportId }
 
-    var authoritiesById by remember { mutableStateOf<MutableMap<String, AuthorityModel>>(mutableMapOf()) }
+    var authorities by remember { mutableStateOf<List<Authority>>(emptyList()) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    var notice by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(report.sentAuthorities) {
-        val map = mutableMapOf<String, AuthorityModel>()
-        repo.getAuthoritiesForIncident(report.incidentTypes.firstOrNull() ?: "pothole", report.state, report.city)
-            .forEach { map[it.id] = it }
-        authoritiesById = map
-    }
-
-    fun formatAuthorities(): String {
-        return report.sentAuthorities.joinToString(", ") { id ->
-            authoritiesById[id]?.name ?: id
+    LaunchedEffect(reportId) {
+        val loaded = mutableListOf<Authority>()
+        report?.sentAuthorities?.forEach { id ->
+            repo.getAuthority(id)?.let { loaded.add(it) }
         }
+        if (loaded.isEmpty() && report != null) {
+            report.incidentTypes.forEach { tag ->
+                repo.getAuthoritiesForIncident(tag, report.state, report.city.lowercase())
+                    .forEach { candidate ->
+                        if (report.sentAuthorities.contains(candidate.id)) loaded.add(candidate)
+                    }
+            }
+        }
+        authorities = loaded.distinctBy { it.id }
     }
 
-    fun sendToAuthority(ctx: Context, a: AuthorityModel, method: String, body: String, mediaUri: String?) {
-        val subject = "Civic Incident Report: ${report.incidentTypes.firstOrNull() ?: "Incident"} at ${report.address}"
-        if (method in listOf("email", "both") && a.email.isNotBlank()) {
-            val mail = Intent(Intent.ACTION_SENDTO).apply {
-                data = Uri.parse("mailto:${a.email}")
-                putExtra(Intent.EXTRA_SUBJECT, subject)
-                putExtra(Intent.EXTRA_TEXT, body)
-                mediaUri?.let {
-                    putExtra(Intent.EXTRA_STREAM, Uri.parse(it))
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    Scaffold(topBar = {
+        TopAppBar(
+            title = { Text("Report details", fontWeight = FontWeight.Bold) },
+            navigationIcon = {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
+                }
+            },
+            actions = {
+                IconButton(onClick = { showDeleteDialog = true }) {
+                    Icon(Icons.Filled.Delete, contentDescription = "Delete report")
                 }
             }
-            try { ctx.startActivity(mail) } catch (e: Exception) {
-                android.app.AlertDialog.Builder(ctx)
-                    .setTitle("No email app")
-                    .setMessage("Install an email app to send by email.")
-                    .setPositiveButton("OK") { _, _ -> }
-                    .show()
-            }
-        }
-        if (method in listOf("sms", "both") && a.phone.isNotBlank()) {
-            val sms = Intent(Intent.ACTION_SENDTO).apply {
-                data = Uri.parse("smsto:${a.phone}")
-                putExtra(Intent.EXTRA_TEXT, body)
-            }
-            try { ctx.startActivity(sms) } catch (e: Exception) {
-                android.app.AlertDialog.Builder(ctx)
-                    .setTitle("No SMS app")
-                    .setMessage("Install an SMS app to send by SMS.")
-                    .setPositiveButton("OK") { _, _ -> }
-                    .show()
-            }
-        }
-    }
-
-    fun resendReport(report: com.arin.civicreport.model.Report) {
-        val method = report.sendMethod
-        authoritiesById.values.forEach { a ->
-            if (report.sentAuthorities.contains(a.id)) {
-                sendToAuthority(context, a, method, buildReportBody(report), report.mediaUris.firstOrNull())
-            }
-        }
-    }
-
-    fun buildReportBody(report: com.arin.civicreport.model.Report): String {
-        return buildString {
-            append("Civic Incident Report\n\n")
-            append("Types: ${report.incidentTypes.joinToString(", ")}\n")
-            append("Location: ${report.address.ifBlank { "unknown" }}\n")
-            append("Latitude: ${"%.6f".format(report.latitude)}\n")
-            append("Longitude: ${"%.6f".format(report.longitude)}\n")
-            append("Media: ${report.mediaUris.joinToString(", ")} ($report.mediaType)\n")
-            append("Description: ${report.description.ifBlank { "No description provided" }}\n")
-        }
-    }
-
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Report Details", fontWeight = FontWeight.Bold) },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, contentDescription = "Back") } }
-            )
-        },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = { showResendConfirm = true },
-                modifier = Modifier.clip(CircleShape),
-                containerColor = MaterialTheme.colorScheme.primaryContainer
+        )
+    }) { padding ->
+        if (report == null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Default.Send, contentDescription = "Resend report")
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator()
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Loading report...", style = MaterialTheme.typography.bodyMedium)
+                }
             }
+            return@Scaffold
         }
-    ) { padding ->
-        Column(modifier = Modifier
-            .fillMaxSize()
-            .padding(padding)
-            .padding(16.dp)) {
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(16.dp)
+        ) {
             Card(
-                modifier = Modifier.fillMaxWidth().clickable { showMenu = true },
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                )
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
-                    Text(report.incidentTypes.joinToString(", "), fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                    Text("${report.address.ifBlank { "Location unknown" }}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text("Date: ${formatDate(report.timestamp)}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text("Description: ${report.description.ifBlank { "No description provided" }}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text("Latitude: ${"%.6f".format(report.latitude)}  Longitude: ${"%.6f".format(report.longitude)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text("Media: ${report.mediaUris.joinToString(", ")}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text("Sent to: ${formatAuthorities()}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text("Send method: ${report.sendMethod}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        report.incidentTypes.joinToString(", ") { IncidentType.titleFor(it) },
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        report.address.ifBlank { "Location unknown" },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text("Filed: ${formatDate(report.timestamp)}", style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        "GPS: ${"%.6f".format(report.latitude)}, ${"%.6f".format(report.longitude)}",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Text("Media: ${report.mediaType}", style = MaterialTheme.typography.bodySmall)
+                    if (report.description.isNotBlank()) {
+                        Text("Notes: ${report.description}", style = MaterialTheme.typography.bodyMedium)
+                    }
                 }
             }
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                StatusBadge(report.status)
+                Text("Method: ${report.sendMethod}", style = MaterialTheme.typography.bodySmall)
+            }
             Spacer(modifier = Modifier.height(12.dp))
-            Box {
-                val badgeColor = when (report.status) {
-                    IncidentStatus.Sent -> MaterialTheme.colorScheme.primary
-                    IncidentStatus.Pending -> Color(0xFFFFA600)
-                    IncidentStatus.Failed -> MaterialTheme.colorScheme.error
-                    IncidentStatus.Draft -> MaterialTheme.colorScheme.secondaryContainer
-                }
-                Surface(color = badgeColor, shape = MaterialTheme.shapes.small) {
+            Text("Notified offices", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            if (authorities.isEmpty()) {
+                Text(
+                    report.sentAuthorities.joinToString(", ").ifBlank { "None recorded" },
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            } else {
+                authorities.forEach { authority ->
                     Text(
-                        report.status.name,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (report.status == IncidentStatus.Failed) Color.White else MaterialTheme.colorScheme.onPrimaryContainer
+                        "${authority.name} • ${authority.email} • ${authority.phone}",
+                        style = MaterialTheme.typography.bodyMedium
                     )
                 }
-                IconButton(onClick = { showMenu = true }) {
-                    Icon(Icons.Default.MoreVert, contentDescription = "Report options")
-                }
             }
-            Spacer(modifier = Modifier.height(12.dp))
-            Text("History", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            LazyColumn {
-                items(report.sentAuthorities) { it ->
-                    Text("Notified: ${authoritiesById[it]?.name ?: it} - ${formatDate(report.lastUpdated)}", style = MaterialTheme.typography.bodyMedium)
+            if (notice != null) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(notice ?: "", color = MaterialTheme.colorScheme.primary)
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+            TextButton(
+                onClick = {
+                    val targets = authorities
+                    if (targets.isEmpty()) {
+                        notice = "No saved contacts for this report, so nothing could be resent."
+                    } else {
+                        permissionManager.requestNotificationsPermission()
+                        ReportSender.send(context, targets, report, report.sendMethod)
+                        notice = "Complaint re-opened in email/SMS for the same offices."
+                        scope.launch {
+                            repo.updateStatus(report.id, report.status)
+                        }
+                    }
                 }
+            ) {
+                Icon(Icons.Filled.Send, contentDescription = null)
+                Spacer(modifier = Modifier.height(0.dp))
+                Text("Resend to same offices")
             }
         }
     }
 
-    showMenu?.let {
-        DropdownMenu(expanded = it, onDismissRequest = { showMenu = false }) {
-            DropdownMenuItem(text = { Text("View") }, onClick = { showMenu = false })
-            DropdownMenuItem(text = { Text("Resend") }, onClick = { showMenu = false })
-            DropdownMenuItem(text = { Text("Delete") }, onClick = { showMenu = false })
-        }
-    }
-
-    if (showResendConfirm) {
+    if (showDeleteDialog) {
         AlertDialog(
-            onDismissRequest = { showResendConfirm = false },
-            title = { Text("Resend report?") },
-            text = { Text("This will open email/SMS to notify the same authorities again.") },
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("Delete report?") },
+            text = { Text("The saved record is removed from this phone.") },
             confirmButton = {
                 TextButton(onClick = {
-                    showResendConfirm = false
-                    sending = true
-                    resendReport(report)
-                    sending = false
-                    android.app.AlertDialog.Builder(context)
-                        .setTitle("Resent")
-                        .setMessage("Report ${report.id} sent again.")
-                        .setPositiveButton("OK") { _, _ -> }
-                        .show()
-                }) { Text("Resend") }
+                    showDeleteDialog = false
+                    scope.launch {
+                        repo.deleteReport(reportId)
+                        onDeleted()
+                    }
+                }) { Text("Delete") }
             },
-            dismissButton = { TextButton(onClick = { showResendConfirm = false }) { Text("Cancel") } }
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) { Text("Cancel") }
+            }
         )
     }
-}
-
-private fun formatDate(epochMs: Long): String {
-    val d = java.text.SimpleDateFormat("MMM d, yyyy", java.util.Locale.getDefault())
-    return d.java.util.Date(epochMs).toString()
 }

@@ -1,3 +1,4 @@
+=== ABOUT: The map of screens, fixed so each screen is opened with exactly the settings it expects ===
 package com.arin.civicreport.ui.navigation
 
 import androidx.compose.runtime.Composable
@@ -109,6 +110,8 @@ fun AppNavigation(
             ReportViewScreen(
                 reportId = entry.arguments?.getLong("id") ?: 0L,
                 repo = repo,
+                prefs = prefs,
+                permissionManager = permissionManager,
                 onBack = { navController.popBackStack() },
                 onDeleted = { navController.popBackStack() }
             )
