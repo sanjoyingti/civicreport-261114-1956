@@ -1,9 +1,10 @@
 package com.arin.civicreport.ui.location
 
+import android.content.Context
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -40,7 +41,10 @@ fun MapViewProvider(
     DisposableEffect(Unit) {
         val config = Configuration.getInstance()
         config.userAgentValue = context.packageName
-        config.load(context, context.getSharedPreferences("osmdroid", android.content.Context.MODE_PRIVATE))
+        config.load(
+            context,
+            context.getSharedPreferences("osmdroid", Context.MODE_PRIVATE)
+        )
         onDispose {
             markerState.value = null
             mapState.value?.onDetach()
@@ -63,45 +67,50 @@ fun MapViewProvider(
     AndroidView(
         modifier = Modifier.fillMaxSize(),
         factory = { ctx ->
-            val map = MapView(ctx)
-            map.setTileSource(TileSourceFactory.MAPNIK)
-            map.setMultiTouchControls(true)
-            map.setBuiltInZoomControls(false)
-            map.controller.setZoom(DEFAULT_ZOOM)
-            val start = initialPoint?.let { OsmGeoPoint(it.latitude, it.longitude) }
-                ?: OsmGeoPoint(DEFAULT_LAT, DEFAULT_LON)
-            map.controller.setCenter(start)
-            val marker = Marker(map).apply {
-                position = start
-                setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                title = "Reported spot"
-                isDraggable = false
-            }
-            map.overlays.add(marker)
-            markerState.value = marker
-            val events = MapEventsOverlay(object : MapEventsReceiver {
-                override fun singleTapConfirmedHelper(p: OsmGeoPoint): Boolean {
-                    marker.position = p
-                    map.invalidate()
-                    currentCallback.value(GeoPoint(p.latitude, p.longitude))
-                    return true
+            MapView(ctx).apply {
+                setTileSource(TileSourceFactory.MAPNIK)
+                setMultiTouchControls(true)
+                controller.setZoom(DEFAULT_ZOOM)
+                val start = if (initialPoint != null) {
+                    OsmGeoPoint(initialPoint.latitude, initialPoint.longitude)
+                } else {
+                    OsmGeoPoint(DEFAULT_LAT, DEFAULT_LON)
                 }
+                controller.setCenter(start)
+                if (initialPoint != null) {
+                    addMarker(this, markerState, initialPoint)
+                }
+                overlays.add(
+                    MapEventsOverlay(object : MapEventsReceiver {
+                        override fun singleTapConfirmedHelper(p: OsmGeoPoint): Boolean {
+                            val point = GeoPoint(p.latitude, p.longitude)
+                            val existing = markerState.value
+                            if (existing != null) {
+                                existing.position = p
+                                invalidate()
+                            } else {
+                                addMarker(this@apply, markerState, point)
+                            }
+                            currentCallback.value(point)
+                            return true
+                        }
 
-                override fun longPressHelper(p: OsmGeoPoint): Boolean = false
-            })
-            map.overlays.add(events)
-            mapState.value = map
-            map
+                        override fun longPressHelper(p: OsmGeoPoint): Boolean = false
+                    })
+                )
+                mapState.value = this
+            }
         }
     )
+}
 
-    LaunchedEffect(initialPoint?.latitude, initialPoint?.longitude) {
-        val point = initialPoint ?: return@LaunchedEffect
-        val map = mapState.value ?: return@LaunchedEffect
-        val marker = markerState.value ?: return@LaunchedEffect
-        val target = OsmGeoPoint(point.latitude, point.longitude)
-        marker.position = target
-        map.controller.setCenter(target)
-        map.invalidate()
+private fun addMarker(map: MapView, markerState: MutableState<Marker?>, point: GeoPoint) {
+    val marker = Marker(map).apply {
+        position = OsmGeoPoint(point.latitude, point.longitude)
+        setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+        title = "Reported spot"
     }
+    map.overlays.add(marker)
+    markerState.value = marker
+    map.invalidate()
 }

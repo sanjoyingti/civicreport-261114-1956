@@ -5,6 +5,7 @@ import com.arin.civicreport.model.IncidentStatus
 import com.arin.civicreport.model.Report as ReportModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 
@@ -59,7 +60,7 @@ class Repository(private val database: CivicDatabase) {
                 activity_tags = a.activityTags.joinToString(","),
                 applicable_states = a.applicableStates.joinToString(","),
                 applicable_cities = a.applicableCities.joinToString(","),
-                `order` = a.order
+                order = a.order
             )
         )
     }
@@ -74,6 +75,10 @@ class Repository(private val database: CivicDatabase) {
         city: String
     ): List<AuthorityModel> = withContext(Dispatchers.IO) {
         database.authorityDao().findByTag(typeTag, state, city).map { it.toModel() }
+    }
+
+    suspend fun allAuthoritiesOnce(): List<AuthorityModel> = withContext(Dispatchers.IO) {
+        database.authorityDao().getAll().first().map { it.toModel() }
     }
 
     suspend fun seedAuthorities() = withContext(Dispatchers.IO) {
@@ -109,7 +114,7 @@ class Repository(private val database: CivicDatabase) {
         activityTags = activity_tags.split(",").clean(),
         applicableStates = applicable_states.split(",").clean(),
         applicableCities = applicable_cities.split(",").clean(),
-        order = `order`
+        order = order
     )
 
     private fun List<String>.clean(): List<String> = filter { it.isNotBlank() }

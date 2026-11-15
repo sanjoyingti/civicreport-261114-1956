@@ -2,7 +2,7 @@ package com.arin.civicreport.ui.screens
 
 import android.content.Intent
 import android.net.Uri
-import androidx.compose.foundation.clickable
+import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,8 +19,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Email
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -30,6 +28,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -48,6 +47,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.arin.civicreport.data.Repository
 import com.arin.civicreport.model.Authority
+import com.arin.civicreport.model.IncidentType
 import com.arin.civicreport.ui.screens.report.ReportFlowViewModel
 import java.util.Locale
 
@@ -63,27 +63,25 @@ fun AuthorityFinderScreen(
     val draft by reportViewModel.draft.collectAsState()
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
-    var reloadKey by remember { mutableStateOf(0) }
 
-    LaunchedEffect(draft.incidentTypes, draft.state, draft.city, reloadKey) {
+    LaunchedEffect(draft.incidentTypes, draft.state, draft.city) {
         loading = true
         error = null
-        try {
-            val found = mutableListOf<Authority>()
-            val cityKey = draft.city.lowercase(Locale.US)
-            draft.incidentTypes.forEach { tag ->
-                repo.getAuthoritiesForIncident(tag, draft.state, cityKey).forEach { found.add(it) }
+        val found = LinkedHashMap<String, Authority>()
+        var failure: String? = null
+        draft.incidentTypes.forEach { tag ->
+            try {
+                repo.getAuthoritiesForIncident(
+                    typeTag = tag,
+                    state = draft.state,
+                    city = draft.city.lowercase(Locale.US)
+                ).forEach { found[it.id] = it }
+            } catch (e: Exception) {
+                failure = e.message ?: "Lookup failed"
             }
-            val distinct = found.distinctBy { it.id }.sortedWith(
-                compareBy({ levelRank(it.level) }, { it.order }, { it.name })
-            )
-            if (distinct.isEmpty()) {
-                error = "No matching offices were found for this area yet. Add the right contact in Settings, then tap refresh."
-            }
-            reportViewModel.setAuthorities(distinct, distinct.map { it.id }.toSet())
-        } catch (e: Exception) {
-            error = e.message ?: "Authorities could not be loaded"
         }
+        error = failure
+        reportViewModel.setAuthorities(found.values.sortedBy { it.order })
         loading = false
     }
 
@@ -93,11 +91,6 @@ fun AuthorityFinderScreen(
             navigationIcon = {
                 IconButton(onClick = onBack) {
                     Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
-                }
-            },
-            actions = {
-                IconButton(onClick = { reloadKey += 1 }) {
-                    Icon(Icons.Filled.Refresh, contentDescription = "Search again")
                 }
             }
         )
@@ -109,24 +102,36 @@ fun AuthorityFinderScreen(
                 .padding(16.dp)
         ) {
             Text(
-                "Matched from the location and incident type. Untick anyone who should not receive it.",
+                "Matched automatically for " +
+                    draft.incidentTypes.joinToString(", ") { IncidentType.titleFor(it) } +
+                    (if (draft.state.isNotBlank()) " in ${draft.state}" else ""),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(modifier = Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextButton(onClick = { reportViewModel.selectAll() }) { Text("Select all") }
-                TextButton(onClick = { reportViewModel.clearSelection() }) { Text("Clear") }
-            }
+
             when {
-                loading -> Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                loading -> {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator()
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text("Searching offices for this spot...")
+                    }
+                }
+
+                draft.authorities.isEmpty() -> {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                "No matching office found",
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            Text(
+                                "Add a contact in Settings, or continue and send to the national offices below.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Button(onClick = onContinue) { Text("Continue anyway") }
+                        }
                     }
                 }
 
@@ -135,8 +140,7 @@ fun AuthorityFinderScreen(
                         Card(
                             colors = CardDefaults.cardColors(
                                 containerColor = MaterialTheme.colorScheme.errorContainer
-                            ),
-                            modifier = Modifier.fillMaxWidth()
+                            )
                         ) {
                             Text(
                                 error ?: "",
@@ -146,87 +150,45 @@ fun AuthorityFinderScreen(
                         }
                         Spacer(modifier = Modifier.height(8.dp))
                     }
-                    LazyColumn(modifier = Modifier.weight(1f)) {
-                        items(draft.authorities) { authority ->
-                            val checked = draft.selectedAuthorityIds.contains(authority.id)
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 4.dp)
-                                    .clickable { reportViewModel.toggleAuthority(authority.id) },
-                                colors = CardDefaults.cardColors(
-                                    containerColor = if (checked)
-                                        MaterialTheme.colorScheme.primaryContainer
-                                    else MaterialTheme.colorScheme.surfaceVariant
-                                )
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Checkbox(
-                                        checked = checked,
-                                        onCheckedChange = { reportViewModel.toggleAuthority(authority.id) }
-                                    )
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(authority.name, fontWeight = FontWeight.Bold)
-                                        Text(
-                                            "${authority.level} • ${authority.email}",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                        Text(
-                                            authority.phone,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                    Row {
-                                        IconButton(onClick = {
-                                            val intent = Intent(
-                                                Intent.ACTION_DIAL,
-                                                Uri.parse("tel:${authority.phone.replace(" ", "")}")
-                                            )
-                                            runCatching { context.startActivity(intent) }
-                                        }) {
-                                            Icon(Icons.Filled.Call, contentDescription = "Call")
-                                        }
-                                        IconButton(onClick = {
-                                            val intent = Intent(
-                                                Intent.ACTION_SENDTO,
-                                                Uri.parse("mailto:${authority.email}")
-                                            )
-                                            runCatching { context.startActivity(intent) }
-                                        }) {
-                                            Icon(Icons.Filled.Email, contentDescription = "Email")
-                                        }
-                                        IconButton(onClick = {
-                                            val intent = Intent(
-                                                Intent.ACTION_SENDTO,
-                                                Uri.parse("smsto:${authority.phone.replace(" ", "")}")
-                                            )
-                                            runCatching { context.startActivity(intent) }
-                                        }) {
-                                            Icon(Icons.Filled.Sms, contentDescription = "Message")
-                                        }
-                                    }
-                                }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "${draft.selectedAuthorityIds.size} of ${draft.authorities.size} selected",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Row {
+                            TextButton(onClick = { reportViewModel.selectAll(true) }) {
+                                Text("All")
+                            }
+                            TextButton(onClick = { reportViewModel.selectAll(false) }) {
+                                Text("None")
                             }
                         }
-                        item { Spacer(modifier = Modifier.height(8.dp)) }
+                    }
+                    LazyColumn(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(draft.authorities) { authority ->
+                            AuthorityRow(
+                                authority = authority,
+                                checked = draft.selectedAuthorityIds.contains(authority.id),
+                                onToggle = { reportViewModel.toggleAuthority(authority.id) },
+                                onCall = { dial(context, authority) },
+                                onMail = { mail(context, authority) }
+                            )
+                        }
                     }
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        "${draft.selectedAuthorityIds.size} office(s) selected",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
                     Button(
                         onClick = onContinue,
                         modifier = Modifier.fillMaxWidth(),
                         enabled = draft.selectedAuthorityIds.isNotEmpty()
                     ) {
-                        Text("Review and send")
+                        Text("Continue to review")
                     }
                 }
             }
@@ -234,8 +196,68 @@ fun AuthorityFinderScreen(
     }
 }
 
-private fun levelRank(level: String): Int = when (level) {
-    "Local" -> 0
-    "State" -> 1
-    else -> 2
+@Composable
+private fun AuthorityRow(
+    authority: Authority,
+    checked: Boolean,
+    onToggle: () -> Unit,
+    onCall: () -> Unit,
+    onMail: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+    ) {
+        Row(
+            modifier = Modifier.padding(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Checkbox(checked = checked, onCheckedChange = { onToggle() })
+            Column(modifier = Modifier.weight(1f)) {
+                Text(authority.name, fontWeight = FontWeight.Bold)
+                Text(
+                    authority.level,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    authority.email.ifBlank { "no email" },
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Text(
+                    authority.phone.ifBlank { "no phone" },
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+            IconButton(onClick = onCall, enabled = authority.phone.isNotBlank()) {
+                Icon(Icons.Filled.Call, contentDescription = "Call")
+            }
+            IconButton(onClick = onMail, enabled = authority.email.isNotBlank()) {
+                Icon(Icons.Filled.Email, contentDescription = "Email")
+            }
+        }
+    }
+}
+
+private fun dial(context: android.content.Context, authority: Authority) {
+    try {
+        val uri = Uri.parse("tel:" + authority.phone.replace(" ", ""))
+        context.startActivity(Intent(Intent.ACTION_DIAL, uri))
+    } catch (e: Exception) {
+        Toast.makeText(context, "Could not open the dialler", Toast.LENGTH_SHORT).show()
+    }
+}
+
+private fun mail(context: android.content.Context, authority: Authority) {
+    try {
+        val intent = Intent(
+            Intent.ACTION_SENDTO,
+            Uri.parse("mailto:" + authority.email)
+        )
+        context.startActivity(intent)
+    } catch (e: Exception) {
+        Toast.makeText(context, "Could not open an email app", Toast.LENGTH_SHORT).show()
+    }
 }

@@ -7,11 +7,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
-/** Everything the user has entered so far for the report in progress. */
+/** Everything collected while the user builds one report. */
 data class ReportDraft(
     val incidentTypes: List<String> = emptyList(),
     val mediaUri: String? = null,
-    val mediaType: String = "",
+    val mediaType: String = "photo",
     val latitude: Double = 0.0,
     val longitude: Double = 0.0,
     val address: String = "",
@@ -36,11 +36,11 @@ class ReportFlowViewModel : ViewModel() {
     }
 
     fun start(types: List<String>) {
-        _draft.value = ReportDraft(incidentTypes = types)
+        _draft.update { it.copy(incidentTypes = types) }
     }
 
-    fun setMedia(uri: String, mediaType: String) {
-        _draft.update { it.copy(mediaUri = uri, mediaType = mediaType) }
+    fun setMedia(uri: String, type: String) {
+        _draft.update { it.copy(mediaUri = uri, mediaType = type) }
     }
 
     fun setLocation(
@@ -65,30 +65,31 @@ class ReportFlowViewModel : ViewModel() {
         }
     }
 
-    fun setDescription(description: String) {
-        _draft.update { it.copy(description = description) }
+    fun setDescription(text: String) {
+        _draft.update { it.copy(description = text) }
     }
 
-    fun setAuthorities(authorities: List<Authority>, preselected: Set<String>) {
-        _draft.update { it.copy(authorities = authorities, selectedAuthorityIds = preselected) }
-    }
-
-    fun toggleAuthority(id: String) {
+    fun setAuthorities(list: List<Authority>) {
         _draft.update {
-            val next = if (it.selectedAuthorityIds.contains(id)) {
-                it.selectedAuthorityIds - id
-            } else {
-                it.selectedAuthorityIds + id
-            }
-            it.copy(selectedAuthorityIds = next)
+            it.copy(authorities = list, selectedAuthorityIds = list.map { a -> a.id }.toSet())
         }
     }
 
-    fun selectAll() {
-        _draft.update { it.copy(selectedAuthorityIds = it.authorities.map { a -> a.id }.toSet()) }
+    fun toggleAuthority(id: String) {
+        _draft.update { current ->
+            val next = if (current.selectedAuthorityIds.contains(id))
+                current.selectedAuthorityIds - id
+            else current.selectedAuthorityIds + id
+            current.copy(selectedAuthorityIds = next)
+        }
     }
 
-    fun clearSelection() {
-        _draft.update { it.copy(selectedAuthorityIds = emptySet()) }
+    fun selectAll(selected: Boolean) {
+        _draft.update {
+            it.copy(
+                selectedAuthorityIds = if (selected) it.authorities.map { a -> a.id }.toSet()
+                else emptySet()
+            )
+        }
     }
 }

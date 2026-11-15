@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Framework-only parent so resource linking never fails on a missing library theme. -->
-    <style name="Theme.CivicReport" parent="@android:style/Theme.Material.Light.NoActionBar">
+    <style name="Theme.CivicReport" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowBackground">@android:color/white</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
