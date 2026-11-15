@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="window_background">#FBFDF7</color>
-    <color name="icon_background">#206039</color>
+    <color name="brand_green">#206039</color>
 </resources>

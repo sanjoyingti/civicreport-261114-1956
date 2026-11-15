@@ -27,13 +27,13 @@ fun StatusBadge(status: IncidentStatus) {
         IncidentStatus.Draft -> MaterialTheme.colorScheme.onSecondaryContainer
     }
     Surface(
-        shape = RoundedCornerShape(50),
-        color = background
+        color = background,
+        contentColor = textColour,
+        shape = RoundedCornerShape(50)
     ) {
         Text(
             text = status.name,
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-            color = textColour,
             style = MaterialTheme.typography.labelSmall
         )
     }
